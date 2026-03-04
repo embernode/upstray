@@ -1,0 +1,12 @@
+target/
+**/*.rs.bk
+**/*.qmlc
+
+# Packaging build artifacts
+packaging/src/
+packaging/pkg/
+packaging/upstray/
+packaging/*.pkg.tar.zst
+
+# Editor / tooling configs
+.qmlls.ini

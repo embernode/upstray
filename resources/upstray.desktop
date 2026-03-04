@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=UpsTray
+GenericName=UPS Monitor
+Comment=A modern KDE system tray monitor for Network UPS Tools
+Exec=upstray
+Icon=upstray
+Terminal=false
+Type=Application
+Categories=System;Monitor;HardwareSettings;
+Keywords=ups;power;battery;nut;

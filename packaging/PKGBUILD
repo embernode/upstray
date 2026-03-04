@@ -1,0 +1,38 @@
+pkgname=upstray-git
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Modern KDE system tray monitor for Network UPS Tools (NUT)"
+arch=('x86_64')
+url="https://github.com/upstray/upstray"
+license=('GPL3')
+depends=('qt6-base' 'qt6-declarative' 'qt6-wayland' 'nut')
+makedepends=('rust' 'cargo' 'cmake')
+source=()
+sha256sums=()
+
+prepare() {
+    # Clean up old builds and copy current source tree, excluding packaging dir
+    rm -rf "$srcdir/upstray"
+    mkdir -p "$srcdir/upstray"
+    cp -a "$startdir/../src" "$startdir/../cpp" "$startdir/../qml" "$startdir/../resources" "$startdir/../build.rs" "$startdir/../Cargo.toml" "$startdir/../Cargo.lock" "$srcdir/upstray/"
+}
+
+pkgver() {
+    cd "$srcdir/upstray"
+    printf "0.1.0"
+}
+
+build() {
+    cd "$srcdir/upstray"
+    cargo build --release --locked
+}
+
+package() {
+    cd "$srcdir/upstray"
+    install -Dm755 "target/release/upstray" "$pkgdir/usr/bin/upstray"
+    install -Dm644 "resources/upstray.desktop" "$pkgdir/usr/share/applications/upstray.desktop"
+    
+    if [ -f "resources/icons/upstray.svg" ]; then
+        install -Dm644 "resources/icons/upstray.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/upstray.svg"
+    fi
+}
