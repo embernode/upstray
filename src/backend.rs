@@ -38,9 +38,6 @@ mod ffi {
         #[qproperty(bool, notifications_enabled)]
         type Backend = super::BackendRust;
 
-        #[qsignal]
-        fn quit_requested(self: Pin<&mut Backend>);
-
         #[qinvokable]
         fn init(self: Pin<&mut Backend>);
 
@@ -129,7 +126,7 @@ impl ffi::Backend {
 
     pub fn quit(self: std::pin::Pin<&mut Self>) {
         tracing::info!("Quit requested from QML");
-        self.quit_requested();
+        std::process::exit(0);
     }
 
     pub fn refresh(mut self: std::pin::Pin<&mut Self>) {

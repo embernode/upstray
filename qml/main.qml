@@ -25,13 +25,6 @@ ApplicationWindow {
         id: backend
     }
 
-    Connections {
-        target: backend
-        function onQuitRequested() {
-            Qt.quit()
-        }
-    }
-
     Component.onCompleted: {
         backend.init()
     }
