@@ -13,7 +13,6 @@ mod ffi {
 }
 
 fn main() {
-    // Initialize tracing
     tracing_subscriber::fmt::init();
     tracing::info!("Starting UpsTray");
 
@@ -24,8 +23,13 @@ fn main() {
 
     let (state_tx, state_rx) = tokio::sync::watch::channel(ups_state::UpsState::default());
     backend::STATE_RX
-        .set(state_rx)
+        .set(std::sync::Mutex::new(state_rx))
         .expect("Failed to set STATE_RX");
+
+    let (config_tx, config_rx) = tokio::sync::watch::channel((host, port));
+    backend::CONFIG_TX
+        .set(config_tx)
+        .expect("Failed to set CONFIG_TX");
 
     // Spawn background tokio runtime on a new thread since QApplication handles the main thread
     std::thread::spawn(move || {
@@ -36,7 +40,7 @@ fn main() {
             .expect("Failed to create tokio runtime");
 
         rt.block_on(async {
-            poller::run_polling_loop(state_tx, host, port, poll_interval).await;
+            poller::run_polling_loop(state_tx, config_rx, poll_interval).await;
         });
     });
 

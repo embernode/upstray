@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::time::Instant;
 use tokio::sync::watch;
 use tokio::time::{interval, Duration};
@@ -10,16 +9,10 @@ use crate::ups_state::{StatusFlag, UpsState, UpsStatus};
 
 pub async fn run_polling_loop(
     state_tx: watch::Sender<UpsState>,
-    host: String,
-    port: u16,
+    mut config_rx: watch::Receiver<(String, u16)>,
     poll_interval: Duration,
 ) {
-    let nut_host: rups::Host = (host.clone(), port).try_into().unwrap_or_default();
-    let config = ConfigBuilder::new()
-        .with_host(nut_host)
-        // .with_username("user".to_string())
-        // .with_password("pass".to_string())
-        .build();
+    let (mut host, mut port) = config_rx.borrow_and_update().clone();
 
     let mut poll_interval_timer = interval(poll_interval);
     let mut old_state = UpsState::default();
@@ -28,6 +21,29 @@ pub async fn run_polling_loop(
 
     loop {
         if conn_opt.is_none() {
+            let nut_host: rups::Host = match (host.clone(), port).try_into() {
+                Ok(h) => h,
+                Err(e) => {
+                    tracing::error!("Invalid NUT host '{}:{}': {}", host, port, e);
+                    let mut err_state = UpsState::default();
+                    err_state.connection_ok = false;
+                    let _ = state_tx.send(err_state);
+
+                    tokio::select! {
+                        _ = tokio::time::sleep(backoff) => {},
+                        Ok(()) = config_rx.changed() => {
+                            let cfg = config_rx.borrow_and_update();
+                            host = cfg.0.clone();
+                            port = cfg.1;
+                            backoff = Duration::from_secs(5);
+                        },
+                    }
+                    backoff = std::cmp::min(backoff * 2, Duration::from_secs(60));
+                    continue;
+                }
+            };
+            let config = ConfigBuilder::new().with_host(nut_host).build();
+
             match Connection::new(&config).await {
                 Ok(c) => {
                     tracing::info!("Connected to NUT server at {}:{}", host, port);
@@ -45,25 +61,44 @@ pub async fn run_polling_loop(
                     err_state.connection_ok = false;
                     let _ = state_tx.send(err_state);
 
-                    tokio::time::sleep(backoff).await;
+                    tokio::select! {
+                        _ = tokio::time::sleep(backoff) => {},
+                        Ok(()) = config_rx.changed() => {
+                            let cfg = config_rx.borrow_and_update();
+                            host = cfg.0.clone();
+                            port = cfg.1;
+                            backoff = Duration::from_secs(5);
+                        },
+                    }
                     backoff = std::cmp::min(backoff * 2, Duration::from_secs(60));
                     continue;
                 }
             }
         }
 
-        poll_interval_timer.tick().await;
+        // Wait for next poll tick or config change
+        tokio::select! {
+            _ = poll_interval_timer.tick() => {},
+            Ok(()) = config_rx.changed() => {
+                let cfg = config_rx.borrow_and_update();
+                host = cfg.0.clone();
+                port = cfg.1;
+                conn_opt = None;
+                backoff = Duration::from_secs(5);
+                tracing::info!("Config changed, reconnecting to {}:{}", host, port);
+                continue;
+            },
+        }
 
         if let Some(mut conn) = conn_opt.take() {
             match conn.list_ups().await {
                 Ok(ups_list) => {
-                    for (ups_name, ups_desc) in ups_list {
-                        // Fetch variables
+                    // Only monitor the first UPS
+                    if let Some((ups_name, ups_desc)) = ups_list.into_iter().next() {
                         match conn.list_vars(&ups_name).await {
                             Ok(vars) => {
                                 let state = parse_ups_state(&ups_name, &ups_desc, vars);
 
-                                // Check if status changed
                                 if state.status != old_state.status
                                     || state.connection_ok != old_state.connection_ok
                                 {
@@ -75,13 +110,15 @@ pub async fn run_polling_loop(
                                     });
                                 }
 
-                                if let Err(e) = state_tx.send(state.clone()) {
-                                    tracing::error!("Failed to send UI state update: {}", e);
-                                }
+                                let _ = state_tx.send(state.clone());
                                 old_state = state;
                             }
                             Err(e) => {
-                                tracing::warn!("Failed to fetch vars for UPS {}: {}", ups_name, e);
+                                tracing::warn!(
+                                    "Failed to fetch vars for UPS {}: {}",
+                                    ups_name,
+                                    e
+                                );
                             }
                         }
                     }
@@ -92,7 +129,6 @@ pub async fn run_polling_loop(
                     let mut err_state = UpsState::default();
                     err_state.connection_ok = false;
                     let _ = state_tx.send(err_state);
-                    // conn_opt remains None, will trigger reconnect with backoff next loop iteration
                 }
             }
         }

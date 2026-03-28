@@ -1,8 +1,9 @@
 use crate::ups_state::UpsState;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use tokio::sync::watch;
 
-pub static STATE_RX: OnceLock<watch::Receiver<UpsState>> = OnceLock::new();
+pub static STATE_RX: OnceLock<Mutex<watch::Receiver<UpsState>>> = OnceLock::new();
+pub static CONFIG_TX: OnceLock<watch::Sender<(String, u16)>> = OnceLock::new();
 const UNAVAILABLE: &str = "—";
 
 #[cxx_qt::bridge]
@@ -132,156 +133,172 @@ impl ffi::Backend {
     }
 
     pub fn refresh(mut self: std::pin::Pin<&mut Self>) {
-        if let Some(rx) = STATE_RX.get() {
-            let state = rx.borrow().clone();
-            let status_str = if !state.connection_ok {
-                "Disconnected".to_string()
-            } else if state.name.is_empty() {
-                "Connecting...".to_string()
-            } else {
-                state.status.to_string()
-            };
+        let rx_mutex = match STATE_RX.get() {
+            Some(m) => m,
+            None => return,
+        };
+        let mut rx = match rx_mutex.lock() {
+            Ok(rx) => rx,
+            Err(e) => {
+                tracing::error!("STATE_RX lock poisoned: {}", e);
+                return;
+            }
+        };
 
-            self.as_mut()
-                .set_status_text(cxx_qt_lib::QString::from(&status_str));
+        // Skip refresh if the poller hasn't pushed new data
+        if !rx.has_changed().unwrap_or(false) {
+            return;
+        }
 
-            let charge = state.battery_charge.unwrap_or(0.0) as i32;
-            let charge_str = if state.connection_ok {
-                charge.to_string()
-            } else {
-                "?".to_string()
-            };
-            self.as_mut()
-                .set_battery_charge(cxx_qt_lib::QString::from(&charge_str));
+        let state = rx.borrow_and_update().clone();
+        drop(rx); // Release lock before doing work
 
-            let icon = if !state.connection_ok || state.name.is_empty() {
-                "battery-missing"
-            } else if state
+        let status_str = if !state.connection_ok {
+            "Disconnected".to_string()
+        } else if state.name.is_empty() {
+            "Connecting...".to_string()
+        } else {
+            state.status.to_string()
+        };
+
+        self.as_mut()
+            .set_status_text(cxx_qt_lib::QString::from(&status_str));
+
+        let charge = state.battery_charge.map(|c| c as i32);
+        let charge_str = match charge {
+            Some(c) if state.connection_ok => c.to_string(),
+            _ => "?".to_string(),
+        };
+        self.as_mut()
+            .set_battery_charge(cxx_qt_lib::QString::from(&charge_str));
+
+        let icon = if !state.connection_ok || state.name.is_empty() {
+            "battery-missing"
+        } else if state
+            .status
+            .flags
+            .contains(&crate::ups_state::StatusFlag::LowBattery)
+        {
+            "battery-low"
+        } else if state
+            .status
+            .flags
+            .contains(&crate::ups_state::StatusFlag::OnBattery)
+        {
+            "battery-caution"
+        } else if state
+            .status
+            .flags
+            .contains(&crate::ups_state::StatusFlag::Charging)
+        {
+            "battery-charging"
+        } else if charge.map_or(false, |c| c > 80) {
+            "battery-full"
+        } else {
+            "battery-good"
+        };
+        self.as_mut().set_icon_name(cxx_qt_lib::QString::from(icon));
+
+        let runtime_str = if let Some(secs) = state.battery_runtime_secs {
+            format!("{} min", secs / 60)
+        } else {
+            UNAVAILABLE.to_string()
+        };
+        self.as_mut()
+            .set_runtime_text(cxx_qt_lib::QString::from(&runtime_str));
+
+        self.as_mut().set_input_voltage(cxx_qt_lib::QString::from(
+            &state
+                .input_voltage
+                .map(|v| format!("{:.1} V", v))
+                .unwrap_or_else(|| UNAVAILABLE.to_string()),
+        ));
+
+        self.as_mut().set_output_voltage(cxx_qt_lib::QString::from(
+            &state
+                .output_voltage
+                .map(|v| format!("{:.1} V", v))
+                .unwrap_or_else(|| UNAVAILABLE.to_string()),
+        ));
+
+        self.as_mut().set_load_percentage(cxx_qt_lib::QString::from(
+            &state
+                .ups_load
+                .map(|l| format!("{:.0}%", l))
+                .unwrap_or_else(|| UNAVAILABLE.to_string()),
+        ));
+
+        self.as_mut().set_temperature(cxx_qt_lib::QString::from(
+            &state
+                .temperature
+                .map(|t| format!("{:.1}°C", t))
+                .unwrap_or_else(|| UNAVAILABLE.to_string()),
+        ));
+
+        let mfr = state.manufacturer.unwrap_or_default();
+        let model = state.model.unwrap_or_default();
+        let mut combined = format!("{} {}", mfr, model).trim().to_string();
+        if combined.is_empty() {
+            combined = state.name.clone();
+        }
+        self.as_mut()
+            .set_manufacturer_model(cxx_qt_lib::QString::from(&combined));
+
+        self.as_mut()
+            .set_firmware_version(cxx_qt_lib::QString::from(
+                &state
+                    .firmware_version
+                    .unwrap_or_else(|| UNAVAILABLE.to_string()),
+            ));
+        self.as_mut().set_serial_number(cxx_qt_lib::QString::from(
+            &state.serial.unwrap_or_else(|| UNAVAILABLE.to_string()),
+        ));
+        self.as_mut().set_connection_type(cxx_qt_lib::QString::from(
+            &state.connection_type.unwrap_or_else(|| "Local".to_string()),
+        ));
+        self.as_mut().set_frequency(cxx_qt_lib::QString::from(
+            &state
+                .frequency
+                .map(|v| format!("{:.1} Hz", v))
+                .unwrap_or_else(|| UNAVAILABLE.to_string()),
+        ));
+        self.as_mut().set_efficiency(cxx_qt_lib::QString::from(
+            &state
+                .efficiency
+                .map(|v| format!("{:.0}%", v))
+                .unwrap_or_else(|| UNAVAILABLE.to_string()),
+        ));
+
+        let health = if !state.connection_ok {
+            "critical"
+        } else if state
+            .status
+            .flags
+            .contains(&crate::ups_state::StatusFlag::OnBattery)
+            || state
                 .status
                 .flags
                 .contains(&crate::ups_state::StatusFlag::LowBattery)
-            {
-                "battery-low"
-            } else if state
+            || state
                 .status
                 .flags
-                .contains(&crate::ups_state::StatusFlag::OnBattery)
-            {
-                "battery-caution"
-            } else if state
+                .contains(&crate::ups_state::StatusFlag::Overloaded)
+        {
+            "warning"
+        } else if state
+            .status
+            .flags
+            .contains(&crate::ups_state::StatusFlag::ReplaceBattery)
+            || state
                 .status
                 .flags
-                .contains(&crate::ups_state::StatusFlag::Charging)
-            {
-                "battery-charging"
-            } else if charge > 80 {
-                "battery-full"
-            } else {
-                "battery-good"
-            };
-            self.as_mut().set_icon_name(cxx_qt_lib::QString::from(icon));
-
-            let runtime_str = if let Some(secs) = state.battery_runtime_secs {
-                format!("{} min", secs / 60)
-            } else {
-                UNAVAILABLE.to_string()
-            };
-            self.as_mut()
-                .set_runtime_text(cxx_qt_lib::QString::from(&runtime_str));
-
-            self.as_mut().set_input_voltage(cxx_qt_lib::QString::from(
-                &state
-                    .input_voltage
-                    .map(|v| format!("{:.1} V", v))
-                    .unwrap_or_else(|| UNAVAILABLE.to_string()),
-            ));
-
-            self.as_mut().set_output_voltage(cxx_qt_lib::QString::from(
-                &state
-                    .output_voltage
-                    .map(|v| format!("{:.1} V", v))
-                    .unwrap_or_else(|| UNAVAILABLE.to_string()),
-            ));
-
-            self.as_mut().set_load_percentage(cxx_qt_lib::QString::from(
-                &state
-                    .ups_load
-                    .map(|l| format!("{:.0}%", l))
-                    .unwrap_or_else(|| UNAVAILABLE.to_string()),
-            ));
-
-            self.as_mut().set_temperature(cxx_qt_lib::QString::from(
-                &state
-                    .temperature
-                    .map(|t| format!("{:.1}°C", t))
-                    .unwrap_or_else(|| UNAVAILABLE.to_string()),
-            ));
-
-            let mfr = state.manufacturer.unwrap_or_default();
-            let model = state.model.unwrap_or_default();
-            let mut combined = format!("{} {}", mfr, model).trim().to_string();
-            if combined.is_empty() {
-                combined = state.name.clone();
-            }
-            self.as_mut()
-                .set_manufacturer_model(cxx_qt_lib::QString::from(&combined));
-
-            self.as_mut()
-                .set_firmware_version(cxx_qt_lib::QString::from(
-                    &state
-                        .firmware_version
-                        .unwrap_or_else(|| UNAVAILABLE.to_string()),
-                ));
-            self.as_mut().set_serial_number(cxx_qt_lib::QString::from(
-                &state.serial.unwrap_or_else(|| UNAVAILABLE.to_string()),
-            ));
-            self.as_mut().set_connection_type(cxx_qt_lib::QString::from(
-                &state.connection_type.unwrap_or_else(|| "Local".to_string()),
-            ));
-            self.as_mut().set_frequency(cxx_qt_lib::QString::from(
-                &state
-                    .frequency
-                    .map(|v| format!("{:.1} Hz", v))
-                    .unwrap_or_else(|| UNAVAILABLE.to_string()),
-            ));
-            self.as_mut().set_efficiency(cxx_qt_lib::QString::from(
-                &state
-                    .efficiency
-                    .map(|v| format!("{:.0}%", v))
-                    .unwrap_or_else(|| UNAVAILABLE.to_string()),
-            ));
-
-            let health = if !state.connection_ok {
-                "critical"
-            } else if state
-                .status
-                .flags
-                .contains(&crate::ups_state::StatusFlag::OnBattery)
-                || state
-                    .status
-                    .flags
-                    .contains(&crate::ups_state::StatusFlag::LowBattery)
-                || state
-                    .status
-                    .flags
-                    .contains(&crate::ups_state::StatusFlag::Overloaded)
-            {
-                "warning"
-            } else if state
-                .status
-                .flags
-                .contains(&crate::ups_state::StatusFlag::ReplaceBattery)
-                || state
-                    .status
-                    .flags
-                    .contains(&crate::ups_state::StatusFlag::ForcedShutdown)
-            {
-                "critical"
-            } else {
-                "good"
-            };
-            self.as_mut().set_health(cxx_qt_lib::QString::from(health));
-        }
+                .contains(&crate::ups_state::StatusFlag::ForcedShutdown)
+        {
+            "critical"
+        } else {
+            "good"
+        };
+        self.as_mut().set_health(cxx_qt_lib::QString::from(health));
     }
 
     pub fn save_network_settings(
@@ -290,11 +307,33 @@ impl ffi::Backend {
         port: cxx_qt_lib::QString,
     ) {
         let host_str = host.to_string();
-        let port_num: u16 = port.to_string().parse().unwrap_or(3493);
+        let port_str = port.to_string();
+
+        if host_str.trim().is_empty() {
+            tracing::warn!("Ignoring empty host");
+            return;
+        }
+        let port_num: u16 = match port_str.parse() {
+            Ok(p) if p > 0 => p,
+            _ => {
+                tracing::warn!("Invalid port '{}', ignoring", port_str);
+                return;
+            }
+        };
+
         match crate::config::save_config(&host_str, port_num) {
             Ok(_) => tracing::info!("Network settings saved: {}:{}", host_str, port_num),
-            Err(e) => tracing::error!("Failed to save network settings: {}", e),
+            Err(e) => {
+                tracing::error!("Failed to save network settings: {}", e);
+                return;
+            }
         }
+
+        // Notify the poller to reconnect with new settings
+        if let Some(tx) = CONFIG_TX.get() {
+            let _ = tx.send((host_str.clone(), port_num));
+        }
+
         self.as_mut()
             .set_nut_host(cxx_qt_lib::QString::from(&host_str));
         self.as_mut()

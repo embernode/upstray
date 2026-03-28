@@ -12,7 +12,7 @@ ApplicationWindow {
     id: mainWindow
     width: 460
     height: 550
-    visible: true
+    visible: false
     title: qsTr("UpsTray")
     
     // Hide instead of close when the window X button is clicked

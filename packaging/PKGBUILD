@@ -1,5 +1,5 @@
 pkgname=upstray-git
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Modern KDE system tray monitor for Network UPS Tools (NUT)"
 arch=('x86_64')
@@ -19,7 +19,7 @@ prepare() {
 
 pkgver() {
     cd "$srcdir/upstray"
-    printf "0.1.0"
+    printf "0.2.0"
 }
 
 build() {

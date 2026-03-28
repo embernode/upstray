@@ -109,28 +109,7 @@ Item {
 
                 Label {
                     Layout.fillWidth: true
-                    text: "ℹ Network changes take effect on next restart."
-                    color: palette.placeholderText
-                    font.pixelSize: 11
-                    wrapMode: Text.WordWrap
-                }
-
-                // UPS Commands — disabled (not supported by all UPS models)
-                Button {
-                    Layout.fillWidth: true
-                    text: "Run Self-Test"
-                    enabled: false
-                    opacity: 0.4
-                }
-                Button {
-                    Layout.fillWidth: true
-                    text: "Calibrate Battery"
-                    enabled: false
-                    opacity: 0.4
-                }
-                Label {
-                    Layout.fillWidth: true
-                    text: "ℹ UPS command features (self-test, calibrate) are not universally supported and are disabled."
+                    text: "ℹ The connection will reconnect automatically after saving."
                     color: palette.placeholderText
                     font.pixelSize: 11
                     wrapMode: Text.WordWrap

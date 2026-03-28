@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct UpsState {
     pub name: String,
     pub description: String,
@@ -79,6 +79,32 @@ pub enum StatusFlag {
     NoCommunication, // NOCOMM
     Overloaded,      // OVER
     Bypass,          // BYPASS
+}
+
+impl PartialEq for UpsState {
+    fn eq(&self, other: &Self) -> bool {
+        // Intentionally excludes last_updated — two states with identical UPS data
+        // should compare equal regardless of when they were sampled.
+        self.name == other.name
+            && self.description == other.description
+            && self.status == other.status
+            && self.battery_charge == other.battery_charge
+            && self.battery_charge_low == other.battery_charge_low
+            && self.battery_runtime_secs == other.battery_runtime_secs
+            && self.battery_voltage == other.battery_voltage
+            && self.input_voltage == other.input_voltage
+            && self.output_voltage == other.output_voltage
+            && self.ups_load == other.ups_load
+            && self.manufacturer == other.manufacturer
+            && self.model == other.model
+            && self.serial == other.serial
+            && self.temperature == other.temperature
+            && self.firmware_version == other.firmware_version
+            && self.connection_type == other.connection_type
+            && self.frequency == other.frequency
+            && self.efficiency == other.efficiency
+            && self.connection_ok == other.connection_ok
+    }
 }
 
 impl Default for UpsState {

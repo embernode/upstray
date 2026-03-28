@@ -1,10 +1,19 @@
 use crate::ups_state::{StatusFlag, UpsState};
 use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::OnceCell;
 use zbus::proxy;
 use zbus::Connection;
 
 /// Global kill-switch for all desktop notifications (toggled from QML Settings).
 pub static NOTIFICATIONS_ENABLED: AtomicBool = AtomicBool::new(true);
+
+static DBUS_CONNECTION: OnceCell<Connection> = OnceCell::const_new();
+
+async fn get_dbus_connection() -> zbus::Result<&'static Connection> {
+    DBUS_CONNECTION
+        .get_or_try_init(|| Connection::session())
+        .await
+}
 
 #[proxy(
     interface = "org.freedesktop.Notifications",
@@ -40,8 +49,8 @@ pub async fn send_notification(
     if !NOTIFICATIONS_ENABLED.load(Ordering::Relaxed) {
         return Ok(());
     }
-    let connection = Connection::session().await?;
-    let proxy = NotificationsProxy::new(&connection).await?;
+    let connection = get_dbus_connection().await?;
+    let proxy = NotificationsProxy::new(connection).await?;
 
     let mut hints = std::collections::HashMap::new();
     hints.insert("urgency", zbus::zvariant::Value::U8(urgency as u8));
