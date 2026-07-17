@@ -89,7 +89,7 @@ pub fn transition_notifications(prev: Option<&UpsState>, new: &UpsState) -> Vec<
             out.push(Notification {
                 summary: "UPS: Connection Lost",
                 body: format!("Cannot reach UPS '{}'. Check NUT service.", prev.name),
-                urgency: Urgency::Normal,
+                urgency: Urgency::Critical,
                 icon: "dialog-warning",
             });
             return out;
@@ -99,7 +99,7 @@ pub fn transition_notifications(prev: Option<&UpsState>, new: &UpsState) -> Vec<
             out.push(Notification {
                 summary: "UPS: Connection Restored",
                 body: format!("Communication with '{}' re-established.", new.name),
-                urgency: Urgency::Low,
+                urgency: Urgency::Normal,
                 icon: "dialog-information",
             });
             // Fall through: a reconnect that reveals the UPS is already on battery (or
@@ -139,7 +139,7 @@ pub fn transition_notifications(prev: Option<&UpsState>, new: &UpsState) -> Vec<
                 "Power outage detected. Running on battery ({}%, ~{} min)",
                 charge, runtime
             ),
-            urgency: Urgency::Normal,
+            urgency: Urgency::Critical,
             icon: "battery-caution",
         });
     }
@@ -172,7 +172,7 @@ pub fn transition_notifications(prev: Option<&UpsState>, new: &UpsState) -> Vec<
         out.push(Notification {
             summary: "UPS: Power Restored",
             body: format!("Mains power restored. Battery at {}%", charge),
-            urgency: Urgency::Low,
+            urgency: Urgency::Normal,
             icon: "battery-charging",
         });
     }
@@ -211,12 +211,17 @@ mod tests {
         ns.iter().map(|n| n.summary).collect()
     }
 
+    fn urgencies(ns: &[Notification]) -> Vec<Urgency> {
+        ns.iter().map(|n| n.urgency).collect()
+    }
+
     #[test]
     fn connected_to_lost_fires_connection_lost_once() {
         let prev = connected(vec![StatusFlag::Online]);
         let lost = disconnected();
         let first = transition_notifications(Some(&prev), &lost);
         assert_eq!(summaries(&first), vec!["UPS: Connection Lost"]);
+        assert_eq!(urgencies(&first), vec![Urgency::Critical]);
 
         // A second consecutive failure must not re-fire.
         let again = transition_notifications(Some(&lost), &lost);
@@ -229,6 +234,7 @@ mod tests {
         let new = connected(vec![StatusFlag::Online]);
         let ns = transition_notifications(Some(&prev), &new);
         assert_eq!(summaries(&ns), vec!["UPS: Connection Restored"]);
+        assert_eq!(urgencies(&ns), vec![Urgency::Normal]);
     }
 
     #[test]
@@ -243,6 +249,7 @@ mod tests {
         let new = connected(vec![StatusFlag::OnBattery, StatusFlag::Discharging]);
         let ns = transition_notifications(None, &new);
         assert_eq!(summaries(&ns), vec!["UPS: On Battery"]);
+        assert_eq!(urgencies(&ns), vec![Urgency::Critical]);
     }
 
     #[test]
@@ -254,6 +261,7 @@ mod tests {
             summaries(&ns),
             vec!["UPS: Connection Restored", "UPS: On Battery"]
         );
+        assert_eq!(urgencies(&ns), vec![Urgency::Normal, Urgency::Critical]);
     }
 
     #[test]
@@ -262,5 +270,6 @@ mod tests {
         let new = connected(vec![StatusFlag::Online]);
         let ns = transition_notifications(Some(&prev), &new);
         assert_eq!(summaries(&ns), vec!["UPS: Power Restored"]);
+        assert_eq!(urgencies(&ns), vec![Urgency::Normal]);
     }
 }

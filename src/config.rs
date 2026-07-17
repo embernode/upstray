@@ -54,6 +54,8 @@ pub struct ServerConfig {
     pub host: String,
     #[serde(default = "default_port")]
     pub port: u16,
+    #[serde(default)]
+    pub ups_name: String,
 }
 
 impl Default for ServerConfig {
@@ -61,6 +63,7 @@ impl Default for ServerConfig {
         Self {
             host: default_host(),
             port: default_port(),
+            ups_name: String::new(),
         }
     }
 }
@@ -148,6 +151,12 @@ pub fn save_config(host: &str, port: u16) -> Result<(), Box<dyn std::error::Erro
     let mut config = load_config();
     config.server.host = host.to_string();
     config.server.port = port;
+    save_full_config(&config)
+}
+
+pub fn save_ups_name(ups_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut config = load_config();
+    config.server.ups_name = ups_name.to_string();
     save_full_config(&config)
 }
 

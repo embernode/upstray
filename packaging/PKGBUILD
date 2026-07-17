@@ -1,11 +1,11 @@
 pkgname=upstray
-pkgver=0.2.2
+pkgver=0.3.0
 pkgrel=1
 pkgdesc="Modern KDE system tray monitor for Network UPS Tools (NUT)"
 arch=('x86_64')
 url="https://github.com/embernode/upstray"
 license=('GPL-3.0-or-later')
-depends=('qt6-base' 'qt6-declarative' 'qt6-wayland')
+depends=('qt6-base' 'qt6-declarative' 'qt6-svg' 'qt6-wayland')
 optdepends=('nut: run a local NUT server/driver stack')
 conflicts=('upstray-git')
 makedepends=('rust' 'cargo' 'cmake')

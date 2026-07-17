@@ -8,6 +8,12 @@ fn main() {
             .qml_file("qml/components/DetailsTab.qml")
             .qml_file("qml/components/SettingsTab.qml"),
     )
+    .qrc_resources([
+        "resources/icons/upstray-online.svg",
+        "resources/icons/upstray-onbattery.svg",
+        "resources/icons/upstray-lowbattery.svg",
+        "resources/icons/upstray-disconnected.svg",
+    ])
     .qt_module("Network")
     .qt_module("Widgets") // Needed for QApplication
     .files(["src/backend.rs"])

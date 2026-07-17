@@ -32,6 +32,9 @@ pub struct UpsState {
     // Meta
     pub last_updated: Instant,
     pub connection_ok: bool,
+
+    // Names of every UPS the last successful list_ups reported (empty when unknown).
+    pub available_ups: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,6 +107,7 @@ impl PartialEq for UpsState {
             && self.frequency == other.frequency
             && self.efficiency == other.efficiency
             && self.connection_ok == other.connection_ok
+            && self.available_ups == other.available_ups
     }
 }
 
@@ -130,6 +134,7 @@ impl Default for UpsState {
             efficiency: None,
             last_updated: Instant::now(),
             connection_ok: false,
+            available_ups: Vec::new(),
         }
     }
 }

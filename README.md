@@ -4,12 +4,15 @@ A modern, minimal-footprint KDE Plasma system tray monitor for [Network UPS Tool
 
 ## Features
 
-- **Live System Tray Status** — Dynamic battery icons and tooltip reflecting real-time UPS state
+- **Live System Tray Status** — Tray icon changes with UPS state (online / on battery / low battery / disconnected), with a tooltip showing status, charge, and runtime at a glance
 - **Rich Detail Window** — Tabbed UI showing live power metrics (voltage, load, runtime, temperature), device info, and settings
-- **Desktop Notifications** — Native KDE/D-Bus alerts for power outage, low battery, and reconnection events
-- **Persistent Settings** — Notification toggle and NUT server address saved to `~/.config/upstray/config.toml`; autostart is tracked via a `~/.config/autostart/upstray.desktop` file that the app writes or removes when you toggle it
+- **UPS Device Selection** — Point upstray at a specific UPS on servers with multiple devices, selectable from the Settings tab and hot-reloaded without restart
+- **Desktop Notifications** — Native KDE/D-Bus alerts for power outage, low battery, and reconnection events; outage-class notifications (on battery, low battery, shutdown, connection lost) are sent critical/persistent, restore notifications are normal urgency
+- **Persistent Settings** — Notification toggle, NUT server address, and UPS device saved to `~/.config/upstray/config.toml`; autostart is tracked via a `~/.config/autostart/upstray.desktop` file that the app writes or removes when you toggle it
 - **Async & Non-blocking** — Tokio-powered background poller with persistent TCP connection and exponential backoff reconnection
 - **Wayland Native** — Uses `QSystemTrayIcon` via Qt's StatusNotifierItem protocol; works on KDE Plasma 6 Wayland sessions
+
+See [TODO.md](TODO.md) for the roadmap.
 
 ## Screenshots
 
@@ -73,6 +76,7 @@ poll_interval_secs = 5
 [server]
 host = "localhost"
 port = 3493
+# ups_name = "ups"  # empty or omitted = auto-select the first device the server reports
 
 [notifications]
 enabled = true

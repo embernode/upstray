@@ -48,8 +48,23 @@ ApplicationWindow {
     Platform.SystemTrayIcon {
         id: trayIcon
         visible: true
-        icon.name: backend.icon_name
-        tooltip: "UPS: " + backend.status_text + " (" + backend.battery_charge + "%)"
+        icon.source: {
+            var base = "qrc:/qt/qml/com/upstray/app/resources/icons/upstray-"
+            if (backend.status_text === "Disconnected"
+                    || backend.status_text === "Connecting..."
+                    || backend.status_text === "Initializing...")
+                return base + "disconnected.svg"
+            var flags = backend.status_text.split(", ")
+            if (flags.indexOf("Low Battery") !== -1)
+                return base + "lowbattery.svg"
+            if (flags.indexOf("On Battery") !== -1)
+                return base + "onbattery.svg"
+            return base + "online.svg"
+        }
+        tooltip: {
+            var charge = isNaN(parseInt(backend.battery_charge)) ? "—" : backend.battery_charge + "%"
+            return "UPS: " + backend.status_text + "\nBattery: " + charge + "\nRuntime: " + backend.runtime_text
+        }
         
         onActivated: function(reason) {
             if (reason === Platform.SystemTrayIcon.Trigger) {

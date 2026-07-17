@@ -19,6 +19,7 @@ fn main() {
     let config = config::load_config();
     let host = config.server.host;
     let port = config.server.port;
+    let ups_name = config.server.ups_name;
     let poll_interval = tokio::time::Duration::from_secs(config.general.poll_interval_secs);
 
     let (state_tx, state_rx) = tokio::sync::watch::channel(ups_state::UpsState::default());
@@ -26,7 +27,7 @@ fn main() {
         .set(std::sync::Mutex::new(state_rx))
         .expect("Failed to set STATE_RX");
 
-    let (config_tx, config_rx) = tokio::sync::watch::channel((host, port));
+    let (config_tx, config_rx) = tokio::sync::watch::channel((host, port, ups_name));
     backend::CONFIG_TX
         .set(config_tx)
         .expect("Failed to set CONFIG_TX");

@@ -92,6 +92,67 @@ Item {
 
             Rectangle { Layout.fillWidth: true; height: 1; color: palette.mid }
 
+            // UPS Device
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 10
+
+                Label { text: "UPS Device"; font.bold: true }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    Label { text: "Device to monitor"; font.pixelSize: 12 }
+                    ComboBox {
+                        id: upsCombo
+                        Layout.fillWidth: true
+                        model: {
+                            var list = ["Auto (first device)"]
+                            if (root.backend && root.backend.available_ups.length > 0)
+                                list = list.concat(root.backend.available_ups.split(","))
+                            // Keep the configured device visible even when the live list
+                            // is empty (disconnected / before first poll), so saving does
+                            // not silently fall back to Auto.
+                            if (root.backend && root.backend.ups_name.length > 0 && list.indexOf(root.backend.ups_name) === -1)
+                                list.push(root.backend.ups_name)
+                            return list
+                        }
+
+                        function syncFromBackend() {
+                            if (!root.backend || root.backend.ups_name.length === 0) {
+                                currentIndex = 0
+                                return
+                            }
+                            var idx = model.indexOf(root.backend.ups_name)
+                            currentIndex = idx === -1 ? 0 : idx
+                        }
+
+                        Component.onCompleted: syncFromBackend()
+                        onModelChanged: if (!popup.visible) syncFromBackend()
+
+                        Connections {
+                            target: root.backend
+                            function onUps_nameChanged() {
+                                if (!upsCombo.popup.visible) upsCombo.syncFromBackend()
+                            }
+                        }
+                    }
+                }
+
+                Button {
+                    Layout.fillWidth: true
+                    text: "Save Device"
+                    onClicked: {
+                        if (root.backend) {
+                            root.backend.save_ups_name(upsCombo.currentIndex === 0 ? "" : upsCombo.currentText)
+                            upsCombo.syncFromBackend()
+                        }
+                    }
+                }
+            }
+
+            Rectangle { Layout.fillWidth: true; height: 1; color: palette.mid }
+
             // Actions
             ColumnLayout {
                 Layout.fillWidth: true

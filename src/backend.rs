@@ -3,7 +3,7 @@ use std::sync::{Mutex, OnceLock};
 use tokio::sync::watch;
 
 pub static STATE_RX: OnceLock<Mutex<watch::Receiver<UpsState>>> = OnceLock::new();
-pub static CONFIG_TX: OnceLock<watch::Sender<(String, u16)>> = OnceLock::new();
+pub static CONFIG_TX: OnceLock<watch::Sender<(String, u16, String)>> = OnceLock::new();
 const UNAVAILABLE: &str = "—";
 
 #[cxx_qt::bridge]
@@ -34,6 +34,8 @@ mod ffi {
         // Settings state
         #[qproperty(QString, nut_host)]
         #[qproperty(QString, nut_port)]
+        #[qproperty(QString, ups_name)]
+        #[qproperty(QString, available_ups)]
         #[qproperty(bool, autostart_enabled)]
         #[qproperty(bool, notifications_enabled)]
         type Backend = super::BackendRust;
@@ -49,6 +51,9 @@ mod ffi {
 
         #[qinvokable]
         fn save_network_settings(self: Pin<&mut Backend>, host: QString, port: QString);
+
+        #[qinvokable]
+        fn save_ups_name(self: Pin<&mut Backend>, name: QString);
 
         #[qinvokable]
         fn set_autostart(self: Pin<&mut Backend>, enabled: bool);
@@ -77,6 +82,8 @@ pub struct BackendRust {
     // Settings
     nut_host: cxx_qt_lib::QString,
     nut_port: cxx_qt_lib::QString,
+    ups_name: cxx_qt_lib::QString,
+    available_ups: cxx_qt_lib::QString,
     autostart_enabled: bool,
     notifications_enabled: bool,
 }
@@ -101,6 +108,8 @@ impl Default for BackendRust {
             serial_number: cxx_qt_lib::QString::from(UNAVAILABLE),
             nut_host: cxx_qt_lib::QString::from("localhost"),
             nut_port: cxx_qt_lib::QString::from("3493"),
+            ups_name: cxx_qt_lib::QString::from(""),
+            available_ups: cxx_qt_lib::QString::from(""),
             autostart_enabled: false,
             notifications_enabled: true,
         }
@@ -115,6 +124,8 @@ impl ffi::Backend {
             .set_nut_host(cxx_qt_lib::QString::from(&config.server.host));
         self.as_mut()
             .set_nut_port(cxx_qt_lib::QString::from(&config.server.port.to_string()));
+        self.as_mut()
+            .set_ups_name(cxx_qt_lib::QString::from(&config.server.ups_name));
         self.as_mut().set_autostart_enabled(autostart);
         self.as_mut()
             .set_notifications_enabled(config.notifications.enabled);
@@ -296,6 +307,14 @@ impl ffi::Backend {
             "good"
         };
         self.as_mut().set_health(cxx_qt_lib::QString::from(health));
+
+        let available = if state.connection_ok {
+            state.available_ups.join(",")
+        } else {
+            String::new()
+        };
+        self.as_mut()
+            .set_available_ups(cxx_qt_lib::QString::from(&available));
     }
 
     pub fn save_network_settings(
@@ -326,15 +345,38 @@ impl ffi::Backend {
             }
         }
 
-        // Notify the poller to reconnect with new settings
+        // Notify the poller to reconnect with new settings, preserving the
+        // configured UPS name (save_config left it untouched on disk).
+        let ups_name = crate::config::load_config().server.ups_name;
         if let Some(tx) = CONFIG_TX.get() {
-            let _ = tx.send((host_str.clone(), port_num));
+            let _ = tx.send((host_str.clone(), port_num, ups_name));
         }
 
         self.as_mut()
             .set_nut_host(cxx_qt_lib::QString::from(&host_str));
         self.as_mut()
             .set_nut_port(cxx_qt_lib::QString::from(&port_num.to_string()));
+    }
+
+    pub fn save_ups_name(mut self: std::pin::Pin<&mut Self>, name: cxx_qt_lib::QString) {
+        let name_str = name.to_string();
+
+        match crate::config::save_ups_name(&name_str) {
+            Ok(_) => tracing::info!("UPS name saved: '{}'", name_str),
+            Err(e) => {
+                tracing::error!("Failed to save UPS name: {}", e);
+                return;
+            }
+        }
+
+        // Notify the poller to reconnect against the newly selected UPS.
+        let config = crate::config::load_config();
+        if let Some(tx) = CONFIG_TX.get() {
+            let _ = tx.send((config.server.host, config.server.port, name_str.clone()));
+        }
+
+        self.as_mut()
+            .set_ups_name(cxx_qt_lib::QString::from(&name_str));
     }
 
     pub fn set_autostart(mut self: std::pin::Pin<&mut Self>, enabled: bool) {

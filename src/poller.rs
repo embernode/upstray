@@ -12,10 +12,10 @@ const NET_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub async fn run_polling_loop(
     state_tx: watch::Sender<UpsState>,
-    mut config_rx: watch::Receiver<(String, u16)>,
+    mut config_rx: watch::Receiver<(String, u16, String)>,
     poll_interval: Duration,
 ) {
-    let (mut host, mut port) = config_rx.borrow_and_update().clone();
+    let (mut host, mut port, mut ups_name_cfg) = config_rx.borrow_and_update().clone();
 
     let mut poll_interval_timer = interval(poll_interval);
     let mut old_state: Option<UpsState> = None;
@@ -47,7 +47,9 @@ pub async fn run_polling_loop(
                             let cfg = config_rx.borrow_and_update();
                             host = cfg.0.clone();
                             port = cfg.1;
+                            ups_name_cfg = cfg.2.clone();
                             backoff = Duration::from_secs(5);
+                            old_state = None;
                         },
                     }
                     backoff = std::cmp::min(backoff * 2, Duration::from_secs(60));
@@ -88,7 +90,9 @@ pub async fn run_polling_loop(
                             let cfg = config_rx.borrow_and_update();
                             host = cfg.0.clone();
                             port = cfg.1;
+                            ups_name_cfg = cfg.2.clone();
                             backoff = Duration::from_secs(5);
+                            old_state = None;
                         },
                     }
                     backoff = std::cmp::min(backoff * 2, Duration::from_secs(60));
@@ -104,8 +108,10 @@ pub async fn run_polling_loop(
                 let cfg = config_rx.borrow_and_update();
                 host = cfg.0.clone();
                 port = cfg.1;
+                ups_name_cfg = cfg.2.clone();
                 conn_opt = None;
                 backoff = Duration::from_secs(5);
+                old_state = None;
                 tracing::info!("Config changed, reconnecting to {}:{}", host, port);
                 continue;
             },
@@ -126,11 +132,22 @@ pub async fn run_polling_loop(
                 }
             };
 
-            // Only monitor the first UPS
-            let (ups_name, ups_desc) = match ups_list.into_iter().next() {
+            let available: Vec<String> = ups_list.iter().map(|(name, _)| name.clone()).collect();
+
+            let (ups_name, ups_desc) = match select_ups(&ups_list, &ups_name_cfg) {
                 Some(pair) => pair,
                 None => {
-                    tracing::warn!("NUT server at {}:{} reports no UPS devices", host, port);
+                    if ups_name_cfg.is_empty() {
+                        tracing::warn!("NUT server at {}:{} reports no UPS devices", host, port);
+                    } else {
+                        tracing::error!(
+                            "Configured UPS '{}' not found at {}:{}. Available: [{}]",
+                            ups_name_cfg,
+                            host,
+                            port,
+                            available.join(", ")
+                        );
+                    }
                     emit(&mut old_state, UpsState::default());
                     continue;
                 }
@@ -151,7 +168,8 @@ pub async fn run_polling_loop(
             };
 
             match parse_ups_state(&ups_name, &ups_desc, vars) {
-                Some(state) => {
+                Some(mut state) => {
+                    state.available_ups = available;
                     emit(&mut old_state, state);
                     conn_opt = Some(conn);
                 }
@@ -163,6 +181,19 @@ pub async fn run_polling_loop(
                 }
             }
         }
+    }
+}
+
+/// Pick which UPS to monitor from a NUT `list_ups` result.
+///
+/// An empty `configured` name keeps the historical "first UPS" behavior. A
+/// non-empty name must match exactly; a missing name yields `None` so the caller
+/// can treat it as a connection-level failure rather than silently falling back.
+fn select_ups(list: &[(String, String)], configured: &str) -> Option<(String, String)> {
+    if configured.is_empty() {
+        list.first().cloned()
+    } else {
+        list.iter().find(|(name, _)| name == configured).cloned()
     }
 }
 
@@ -266,5 +297,29 @@ mod tests {
         assert!(state.connection_ok);
         assert!(state.status.flags.contains(&StatusFlag::OnBattery));
         assert_eq!(state.battery_charge, Some(80.0));
+    }
+
+    fn ups_list() -> Vec<(String, String)> {
+        vec![
+            ("serverroom".to_string(), "Rack UPS".to_string()),
+            ("desk".to_string(), "Desk UPS".to_string()),
+        ]
+    }
+
+    #[test]
+    fn select_ups_empty_config_picks_first() {
+        let selected = select_ups(&ups_list(), "");
+        assert_eq!(selected, Some(("serverroom".to_string(), "Rack UPS".to_string())));
+    }
+
+    #[test]
+    fn select_ups_named_picks_exact_match() {
+        let selected = select_ups(&ups_list(), "desk");
+        assert_eq!(selected, Some(("desk".to_string(), "Desk UPS".to_string())));
+    }
+
+    #[test]
+    fn select_ups_named_not_found_returns_none() {
+        assert!(select_ups(&ups_list(), "missing").is_none());
     }
 }
