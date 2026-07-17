@@ -97,7 +97,7 @@ impl Default for BackendRust {
             connection_type: cxx_qt_lib::QString::from(UNAVAILABLE),
             frequency: cxx_qt_lib::QString::from(UNAVAILABLE),
             efficiency: cxx_qt_lib::QString::from(UNAVAILABLE),
-            health: cxx_qt_lib::QString::from("Good"),
+            health: cxx_qt_lib::QString::from("good"),
             serial_number: cxx_qt_lib::QString::from(UNAVAILABLE),
             nut_host: cxx_qt_lib::QString::from("localhost"),
             nut_port: cxx_qt_lib::QString::from("3493"),

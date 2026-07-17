@@ -7,7 +7,7 @@ A modern, minimal-footprint KDE Plasma system tray monitor for [Network UPS Tool
 - **Live System Tray Status** — Dynamic battery icons and tooltip reflecting real-time UPS state
 - **Rich Detail Window** — Tabbed UI showing live power metrics (voltage, load, runtime, temperature), device info, and settings
 - **Desktop Notifications** — Native KDE/D-Bus alerts for power outage, low battery, and reconnection events
-- **Persistent Settings** — Autostart toggle, notification toggle, and NUT server address saved to `~/.config/upstray/config.toml`
+- **Persistent Settings** — Notification toggle and NUT server address saved to `~/.config/upstray/config.toml`; autostart is tracked via a `~/.config/autostart/upstray.desktop` file that the app writes or removes when you toggle it
 - **Async & Non-blocking** — Tokio-powered background poller with persistent TCP connection and exponential backoff reconnection
 - **Wayland Native** — Uses `QSystemTrayIcon` via Qt's StatusNotifierItem protocol; works on KDE Plasma 6 Wayland sessions
 
@@ -64,7 +64,7 @@ UpsTray connects to `upsd` over TCP (default `localhost:3493`). If you haven't s
 
 ## Configuration
 
-UpsTray reads `~/.config/upstray/config.toml`. Created on first run with defaults. You can also change the NUT server address from the **Settings** tab in the app.
+UpsTray reads `~/.config/upstray/config.toml`. On first run only the config directory is created; the file itself is written the first time you save settings from the UI, and built-in defaults are used until then. You can also change the NUT server address from the **Settings** tab in the app.
 
 ```toml
 [general]
@@ -83,7 +83,7 @@ enabled = true
 **Build dependencies:** `rust` (stable), `cargo`, `cmake`
 
 ```bash
-git clone https://github.com/YOUR_USER/upstray.git
+git clone https://github.com/embernode/upstray.git
 cd upstray
 cargo build --release
 ./target/release/upstray

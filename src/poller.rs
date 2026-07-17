@@ -5,7 +5,10 @@ use tokio::time::{interval, Duration};
 use rups::tokio::Connection;
 use rups::ConfigBuilder;
 
+use crate::notifier;
 use crate::ups_state::{StatusFlag, UpsState, UpsStatus};
+
+const NET_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub async fn run_polling_loop(
     state_tx: watch::Sender<UpsState>,
@@ -15,9 +18,20 @@ pub async fn run_polling_loop(
     let (mut host, mut port) = config_rx.borrow_and_update().clone();
 
     let mut poll_interval_timer = interval(poll_interval);
-    let mut old_state = UpsState::default();
+    let mut old_state: Option<UpsState> = None;
     let mut conn_opt: Option<Connection> = None;
     let mut backoff = Duration::from_secs(5);
+
+    // Emit a new state to the UI and fire any notifications its transition warrants,
+    // routing every state change (success or failure) through the same bookkeeping.
+    let emit = |old_state: &mut Option<UpsState>, new: UpsState| {
+        let notifications = notifier::transition_notifications(old_state.as_ref(), &new);
+        if !notifications.is_empty() {
+            tokio::spawn(notifier::send_notifications(notifications));
+        }
+        let _ = state_tx.send(new.clone());
+        *old_state = Some(new);
+    };
 
     loop {
         if conn_opt.is_none() {
@@ -25,9 +39,7 @@ pub async fn run_polling_loop(
                 Ok(h) => h,
                 Err(e) => {
                     tracing::error!("Invalid NUT host '{}:{}': {}", host, port, e);
-                    let mut err_state = UpsState::default();
-                    err_state.connection_ok = false;
-                    let _ = state_tx.send(err_state);
+                    emit(&mut old_state, UpsState::default());
 
                     tokio::select! {
                         _ = tokio::time::sleep(backoff) => {},
@@ -44,22 +56,31 @@ pub async fn run_polling_loop(
             };
             let config = ConfigBuilder::new().with_host(nut_host).build();
 
-            match Connection::new(&config).await {
-                Ok(c) => {
-                    tracing::info!("Connected to NUT server at {}:{}", host, port);
-                    conn_opt = Some(c);
-                    backoff = Duration::from_secs(5);
-                }
-                Err(e) => {
+            let conn = match tokio::time::timeout(NET_TIMEOUT, Connection::new(&config)).await {
+                Ok(Ok(c)) => Some(c),
+                Ok(Err(e)) => {
                     tracing::error!(
                         "Failed to connect to NUT server at {}:{}: {}",
                         host,
                         port,
                         e
                     );
-                    let mut err_state = UpsState::default();
-                    err_state.connection_ok = false;
-                    let _ = state_tx.send(err_state);
+                    None
+                }
+                Err(_) => {
+                    tracing::error!("Timed out connecting to NUT server at {}:{}", host, port);
+                    None
+                }
+            };
+
+            match conn {
+                Some(c) => {
+                    tracing::info!("Connected to NUT server at {}:{}", host, port);
+                    conn_opt = Some(c);
+                    backoff = Duration::from_secs(5);
+                }
+                None => {
+                    emit(&mut old_state, UpsState::default());
 
                     tokio::select! {
                         _ = tokio::time::sleep(backoff) => {},
@@ -91,51 +112,61 @@ pub async fn run_polling_loop(
         }
 
         if let Some(mut conn) = conn_opt.take() {
-            match conn.list_ups().await {
-                Ok(ups_list) => {
-                    // Only monitor the first UPS
-                    if let Some((ups_name, ups_desc)) = ups_list.into_iter().next() {
-                        match conn.list_vars(&ups_name).await {
-                            Ok(vars) => {
-                                let state = parse_ups_state(&ups_name, &ups_desc, vars);
+            let ups_list = match tokio::time::timeout(NET_TIMEOUT, conn.list_ups()).await {
+                Ok(Ok(list)) => list,
+                Ok(Err(e)) => {
+                    tracing::error!("Failed to list UPS devices / connection lost: {}", e);
+                    emit(&mut old_state, UpsState::default());
+                    continue;
+                }
+                Err(_) => {
+                    tracing::error!("Timed out listing UPS devices from {}:{}", host, port);
+                    emit(&mut old_state, UpsState::default());
+                    continue;
+                }
+            };
 
-                                if state.status != old_state.status
-                                    || state.connection_ok != old_state.connection_ok
-                                {
-                                    let old = old_state.clone();
-                                    let new = state.clone();
-                                    tokio::spawn(async move {
-                                        crate::notifier::check_and_notify_state_changes(&old, &new)
-                                            .await;
-                                    });
-                                }
+            // Only monitor the first UPS
+            let (ups_name, ups_desc) = match ups_list.into_iter().next() {
+                Some(pair) => pair,
+                None => {
+                    tracing::warn!("NUT server at {}:{} reports no UPS devices", host, port);
+                    emit(&mut old_state, UpsState::default());
+                    continue;
+                }
+            };
 
-                                let _ = state_tx.send(state.clone());
-                                old_state = state;
-                            }
-                            Err(e) => {
-                                tracing::warn!(
-                                    "Failed to fetch vars for UPS {}: {}",
-                                    ups_name,
-                                    e
-                                );
-                            }
-                        }
-                    }
+            let vars = match tokio::time::timeout(NET_TIMEOUT, conn.list_vars(&ups_name)).await {
+                Ok(Ok(vars)) => vars,
+                Ok(Err(e)) => {
+                    tracing::warn!("Failed to fetch vars for UPS {}: {}", ups_name, e);
+                    emit(&mut old_state, UpsState::default());
+                    continue;
+                }
+                Err(_) => {
+                    tracing::warn!("Timed out fetching vars for UPS {}", ups_name);
+                    emit(&mut old_state, UpsState::default());
+                    continue;
+                }
+            };
+
+            match parse_ups_state(&ups_name, &ups_desc, vars) {
+                Some(state) => {
+                    emit(&mut old_state, state);
                     conn_opt = Some(conn);
                 }
-                Err(e) => {
-                    tracing::error!("Failed to list UPS devices / Connection lost: {}", e);
-                    let mut err_state = UpsState::default();
-                    err_state.connection_ok = false;
-                    let _ = state_tx.send(err_state);
+                None => {
+                    // ups.status was absent: treat the poll as failed rather than emitting a
+                    // state with empty flags (which would flap "Power Restored"). Keep the
+                    // connection and try again next tick.
+                    conn_opt = Some(conn);
                 }
             }
         }
     }
 }
 
-fn parse_ups_state(name: &str, desc: &str, vars: Vec<rups::Variable>) -> UpsState {
+fn parse_ups_state(name: &str, desc: &str, vars: Vec<rups::Variable>) -> Option<UpsState> {
     let mut state = UpsState {
         name: name.to_string(),
         description: desc.to_string(),
@@ -144,13 +175,15 @@ fn parse_ups_state(name: &str, desc: &str, vars: Vec<rups::Variable>) -> UpsStat
         ..Default::default()
     };
 
+    let mut saw_status = false;
     for var in vars {
-        let name = var.name();
+        let var_name = var.name();
         let value = var.value();
 
-        match name {
+        match var_name {
             "ups.status" => {
                 state.status = parse_status(&value);
+                saw_status = true;
             }
             "battery.charge" => state.battery_charge = var.value().parse().ok(),
             "battery.charge.low" => state.battery_charge_low = var.value().parse().ok(),
@@ -179,7 +212,12 @@ fn parse_ups_state(name: &str, desc: &str, vars: Vec<rups::Variable>) -> UpsStat
         }
     }
 
-    state
+    if !saw_status {
+        tracing::warn!("UPS {} response is missing ups.status; treating poll as failed", name);
+        return None;
+    }
+
+    Some(state)
 }
 
 fn parse_status(status_str: &str) -> UpsStatus {
@@ -202,4 +240,31 @@ fn parse_status(status_str: &str) -> UpsStatus {
         }
     }
     UpsStatus { flags }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rups::Variable;
+
+    #[test]
+    fn parse_ups_state_without_status_returns_none() {
+        let vars = vec![
+            Variable::parse("battery.charge", "80".to_string()),
+            Variable::parse("ups.load", "20".to_string()),
+        ];
+        assert!(parse_ups_state("myups", "desc", vars).is_none());
+    }
+
+    #[test]
+    fn parse_ups_state_with_status_returns_state() {
+        let vars = vec![
+            Variable::parse("ups.status", "OB DISCHRG".to_string()),
+            Variable::parse("battery.charge", "80".to_string()),
+        ];
+        let state = parse_ups_state("myups", "desc", vars).expect("state present");
+        assert!(state.connection_ok);
+        assert!(state.status.flags.contains(&StatusFlag::OnBattery));
+        assert_eq!(state.battery_charge, Some(80.0));
+    }
 }

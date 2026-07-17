@@ -1,11 +1,12 @@
-pkgname=upstray-git
-pkgver=0.2.1
+pkgname=upstray
+pkgver=0.2.2
 pkgrel=1
 pkgdesc="Modern KDE system tray monitor for Network UPS Tools (NUT)"
 arch=('x86_64')
 url="https://github.com/upstray/upstray"
-license=('GPL3')
-depends=('qt6-base' 'qt6-declarative' 'qt6-wayland' 'nut')
+license=('GPL-3.0-or-later')
+depends=('qt6-base' 'qt6-declarative' 'qt6-wayland')
+optdepends=('nut: run a local NUT server/driver stack')
 makedepends=('rust' 'cargo' 'cmake')
 source=()
 sha256sums=()
@@ -14,12 +15,7 @@ prepare() {
     # Clean up old builds and copy current source tree, excluding packaging dir
     rm -rf "$srcdir/upstray"
     mkdir -p "$srcdir/upstray"
-    cp -a "$startdir/../src" "$startdir/../cpp" "$startdir/../qml" "$startdir/../resources" "$startdir/../build.rs" "$startdir/../Cargo.toml" "$startdir/../Cargo.lock" "$srcdir/upstray/"
-}
-
-pkgver() {
-    cd "$srcdir/upstray"
-    printf "0.2.1"
+    cp -a "$startdir/../src" "$startdir/../cpp" "$startdir/../qml" "$startdir/../resources" "$startdir/../build.rs" "$startdir/../Cargo.toml" "$startdir/../Cargo.lock" "$startdir/../LICENSE" "$srcdir/upstray/"
 }
 
 build() {
@@ -31,8 +27,6 @@ package() {
     cd "$srcdir/upstray"
     install -Dm755 "target/release/upstray" "$pkgdir/usr/bin/upstray"
     install -Dm644 "resources/upstray.desktop" "$pkgdir/usr/share/applications/upstray.desktop"
-    
-    if [ -f "resources/icons/upstray.svg" ]; then
-        install -Dm644 "resources/icons/upstray.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/upstray.svg"
-    fi
+    install -Dm644 "resources/icons/upstray.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/upstray.svg"
+    install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

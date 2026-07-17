@@ -12,10 +12,10 @@ Item {
         anchors.fill: parent
         contentWidth: availableWidth
         clip: true
+        padding: 15
 
         ColumnLayout {
             width: parent.width
-            anchors.margins: 15
             spacing: 20
 
             // General Settings
@@ -103,6 +103,8 @@ Item {
                     onClicked: {
                         if (root.backend) {
                             root.backend.save_network_settings(hostField.text, portField.text)
+                            hostField.text = root.backend.nut_host
+                            portField.text = root.backend.nut_port
                         }
                     }
                 }

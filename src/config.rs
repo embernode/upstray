@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AppConfig {
@@ -93,11 +93,13 @@ pub fn load_config() -> AppConfig {
                 Ok(config) => config,
                 Err(e) => {
                     tracing::error!("Failed to parse config file at {:?}: {}", config_path, e);
+                    backup_corrupt_config(&config_path);
                     AppConfig::default()
                 }
             },
             Err(e) => {
                 tracing::error!("Failed to read config file at {:?}: {}", config_path, e);
+                backup_corrupt_config(&config_path);
                 AppConfig::default()
             }
         }
@@ -108,6 +110,21 @@ pub fn load_config() -> AppConfig {
             let _ = fs::create_dir_all(parent);
         }
         AppConfig::default()
+    }
+}
+
+/// Move an unreadable/unparseable config aside so the next save doesn't clobber it
+/// with defaults, preserving whatever the user had for recovery.
+fn backup_corrupt_config(config_path: &Path) {
+    let backup_path = config_path.with_extension("toml.bak");
+    match fs::rename(config_path, &backup_path) {
+        Ok(_) => tracing::error!("Preserved unreadable config as {:?}", backup_path),
+        Err(e) => tracing::error!(
+            "Failed to back up corrupt config {:?} to {:?}: {}",
+            config_path,
+            backup_path,
+            e
+        ),
     }
 }
 
@@ -151,7 +168,7 @@ pub fn set_autostart(enabled: bool) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let desktop_content = "[Desktop Entry]\nName=UpsTray\nExec=upstray\nIcon=battery-good\nTerminal=false\nType=Application\nX-GNOME-Autostart-enabled=true\n";
+        let desktop_content = "[Desktop Entry]\nName=UpsTray\nExec=upstray\nIcon=upstray\nTerminal=false\nType=Application\nX-GNOME-Autostart-enabled=true\n";
         fs::write(&path, desktop_content)?;
         tracing::info!("Autostart enabled: wrote {:?}", path);
     } else {

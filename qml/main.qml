@@ -15,10 +15,15 @@ ApplicationWindow {
     visible: false
     title: qsTr("UpsTray")
     
-    // Hide instead of close when the window X button is clicked
+    // Hide instead of close when the window X button is clicked, but if no tray
+    // is available there is nowhere to hide to, so actually quit.
     onClosing: function(close_event) {
-        close_event.accepted = false
-        mainWindow.hide()
+        if (trayIcon.available) {
+            close_event.accepted = false
+            mainWindow.hide()
+        } else {
+            backend.quit()
+        }
     }
 
     Backend {
@@ -27,6 +32,10 @@ ApplicationWindow {
 
     Component.onCompleted: {
         backend.init()
+        // Without a tray host the window is the only way to interact with the app.
+        if (!trayIcon.available) {
+            mainWindow.show()
+        }
     }
 
     Timer {
@@ -37,6 +46,7 @@ ApplicationWindow {
     }
 
     Platform.SystemTrayIcon {
+        id: trayIcon
         visible: true
         icon.name: backend.icon_name
         tooltip: "UPS: " + backend.status_text + " (" + backend.battery_charge + "%)"
@@ -113,7 +123,7 @@ ApplicationWindow {
             }
             // Status Badge
             Rectangle {
-                property bool isOnline: backend.status_text === "OL" || backend.status_text === "Online"
+                property bool isOnline: backend.status_text.split(", ").indexOf("Online") !== -1
                 color: isOnline ? "#052e16" : (backend.status_text === "Disconnected" ? palette.midlight : "#450a0a") // Very dark shade
                 radius: 6 // Squircle shape instead of pill
                 implicitWidth: statusLabel.implicitWidth + 24 // Added padding at ends

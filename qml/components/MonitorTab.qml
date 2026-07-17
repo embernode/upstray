@@ -23,26 +23,30 @@ Item {
 
         // Battery Status
         ColumnLayout {
+            id: batterySection
             Layout.fillWidth: true
             spacing: 6
+
+            property bool chargeKnown: !isNaN(parseInt(root.batteryCharge))
+
             RowLayout {
                 Layout.fillWidth: true
                 Label {
                     text: "\uD83D\uDD0B"
                     font.pixelSize: 14
-                    color: parseInt(root.batteryCharge) > 60 ? "#22c55e" : (parseInt(root.batteryCharge) > 30 ? "#eab308" : "#ef4444")
+                    color: !batterySection.chargeKnown ? palette.placeholderText : (parseInt(root.batteryCharge) > 60 ? "#22c55e" : (parseInt(root.batteryCharge) > 30 ? "#eab308" : "#ef4444"))
                 }
                 Label {
-                    text: "Battery" 
+                    text: "Battery"
                     font.pixelSize: 14
                     color: palette.text
                 }
                 Item { Layout.fillWidth: true }
                 Label {
-                    text: root.batteryCharge + "%"
+                    text: batterySection.chargeKnown ? root.batteryCharge + "%" : "\u2014"
                     font.bold: true
                     font.pixelSize: 14
-                    color: parseInt(root.batteryCharge) > 60 ? "#22c55e" : (parseInt(root.batteryCharge) > 30 ? "#eab308" : "#ef4444")
+                    color: !batterySection.chargeKnown ? palette.placeholderText : (parseInt(root.batteryCharge) > 60 ? "#22c55e" : (parseInt(root.batteryCharge) > 30 ? "#eab308" : "#ef4444"))
                 }
             }
             // Custom progress bar (bypasses Breeze style override)
@@ -55,12 +59,13 @@ Item {
 
                 Rectangle {
                     width: {
+                        if (!batterySection.chargeKnown) return parent.width;
                         var pct = parseInt(root.batteryCharge);
-                        return isNaN(pct) ? 0 : (pct / 100.0) * parent.width;
+                        return (pct / 100.0) * parent.width;
                     }
                     height: parent.height
                     radius: 3
-                    color: parseInt(root.batteryCharge) > 60 ? "#22c55e" : (parseInt(root.batteryCharge) > 30 ? "#eab308" : "#ef4444")
+                    color: !batterySection.chargeKnown ? palette.placeholderText : (parseInt(root.batteryCharge) > 60 ? "#22c55e" : (parseInt(root.batteryCharge) > 30 ? "#eab308" : "#ef4444"))
                     opacity: 1.0
                 }
             }

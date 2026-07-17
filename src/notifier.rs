@@ -34,10 +34,19 @@ trait Notifications {
     ) -> zbus::Result<u32>;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Urgency {
     Low = 0,
     Normal = 1,
     Critical = 2,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Notification {
+    pub summary: &'static str,
+    pub body: String,
+    pub urgency: Urgency,
+    pub icon: &'static str,
 }
 
 pub async fn send_notification(
@@ -62,103 +71,196 @@ pub async fn send_notification(
     Ok(())
 }
 
-pub async fn check_and_notify_state_changes(old_state: &UpsState, new_state: &UpsState) {
-    if new_state.name.is_empty() {
-        return;
+pub async fn send_notifications(notifications: Vec<Notification>) {
+    for n in notifications {
+        let _ = send_notification(n.summary, &n.body, n.urgency, n.icon).await;
+    }
+}
+
+/// Pure decision of which desktop notifications a state transition should emit.
+///
+/// `prev` is `None` before any state has ever been observed, so a healthy first
+/// poll stays silent while a first poll that is already on battery still alarms.
+pub fn transition_notifications(prev: Option<&UpsState>, new: &UpsState) -> Vec<Notification> {
+    let mut out = Vec::new();
+
+    if let Some(prev) = prev {
+        if prev.connection_ok && !new.connection_ok {
+            out.push(Notification {
+                summary: "UPS: Connection Lost",
+                body: format!("Cannot reach UPS '{}'. Check NUT service.", prev.name),
+                urgency: Urgency::Normal,
+                icon: "dialog-warning",
+            });
+            return out;
+        }
+
+        if !prev.connection_ok && new.connection_ok {
+            out.push(Notification {
+                summary: "UPS: Connection Restored",
+                body: format!("Communication with '{}' re-established.", new.name),
+                urgency: Urgency::Low,
+                icon: "dialog-information",
+            });
+            // Fall through: a reconnect that reveals the UPS is already on battery (or
+            // any other alarm) must still fire that alarm alongside the restore notice.
+        }
     }
 
-    // Connection lost
-    if old_state.connection_ok && !new_state.connection_ok {
-        let _ = send_notification(
-            "UPS: Connection Lost",
-            &format!("Cannot reach UPS '{}'. Check NUT service.", old_state.name),
-            Urgency::Normal,
-            "dialog-warning",
-        )
-        .await;
-        return;
+    // Status transitions are only meaningful while we currently hold a live connection.
+    if !new.connection_ok {
+        return out;
     }
 
-    // Connection restored
-    if !old_state.connection_ok && new_state.connection_ok {
-        let _ = send_notification(
-            "UPS: Connection Restored",
-            &format!("Communication with '{}' re-established.", new_state.name),
-            Urgency::Low,
-            "dialog-information",
-        )
-        .await;
-        return;
-    }
+    // When reconnecting from a disconnected state its flags are empty, so any currently
+    // active alarm is measured against that empty baseline and re-fires as expected.
+    let empty: Vec<StatusFlag> = Vec::new();
+    let prev_flags: &[StatusFlag] = match prev {
+        Some(p) => &p.status.flags,
+        None => &empty,
+    };
+    let new_flags = &new.status.flags;
 
-    let newly_on_battery = !old_state.status.flags.contains(&StatusFlag::OnBattery)
-        && new_state.status.flags.contains(&StatusFlag::OnBattery);
-    let newly_low_battery = !old_state.status.flags.contains(&StatusFlag::LowBattery)
-        && new_state.status.flags.contains(&StatusFlag::LowBattery);
-    let newly_power_restored = old_state.status.flags.contains(&StatusFlag::OnBattery)
-        && !new_state.status.flags.contains(&StatusFlag::OnBattery)
-        && new_state.connection_ok;
-    let newly_replace_battery = !old_state.status.flags.contains(&StatusFlag::ReplaceBattery)
-        && new_state.status.flags.contains(&StatusFlag::ReplaceBattery);
-    let newly_fsd = !old_state.status.flags.contains(&StatusFlag::ForcedShutdown)
-        && new_state.status.flags.contains(&StatusFlag::ForcedShutdown);
+    let newly = |flag: StatusFlag| !prev_flags.contains(&flag) && new_flags.contains(&flag);
+
+    let newly_on_battery = newly(StatusFlag::OnBattery);
+    let newly_low_battery = newly(StatusFlag::LowBattery);
+    let newly_power_restored = prev_flags.contains(&StatusFlag::OnBattery)
+        && !new_flags.contains(&StatusFlag::OnBattery);
+    let newly_replace_battery = newly(StatusFlag::ReplaceBattery);
+    let newly_fsd = newly(StatusFlag::ForcedShutdown);
 
     if newly_on_battery {
-        let charge = new_state.battery_charge.unwrap_or(0.0);
-        let runtime = new_state.battery_runtime_secs.unwrap_or(0) / 60;
-        let body = format!(
-            "Power outage detected. Running on battery ({}%, ~{} min)",
-            charge, runtime
-        );
-        let _ =
-            send_notification("UPS: On Battery", &body, Urgency::Normal, "battery-caution").await;
+        let charge = new.battery_charge.unwrap_or(0.0);
+        let runtime = new.battery_runtime_secs.unwrap_or(0) / 60;
+        out.push(Notification {
+            summary: "UPS: On Battery",
+            body: format!(
+                "Power outage detected. Running on battery ({}%, ~{} min)",
+                charge, runtime
+            ),
+            urgency: Urgency::Normal,
+            icon: "battery-caution",
+        });
     }
 
     if newly_low_battery {
-        let charge = new_state.battery_charge.unwrap_or(0.0);
-        let runtime = new_state.battery_runtime_secs.unwrap_or(0) / 60;
-        let body = format!(
-            "Battery at {}% (~{} min remaining). Save your work!",
-            charge, runtime
-        );
-        let _ = send_notification(
-            "⚠️ UPS: Low Battery",
-            &body,
-            Urgency::Critical,
-            "battery-low",
-        )
-        .await;
+        let charge = new.battery_charge.unwrap_or(0.0);
+        let runtime = new.battery_runtime_secs.unwrap_or(0) / 60;
+        out.push(Notification {
+            summary: "⚠️ UPS: Low Battery",
+            body: format!(
+                "Battery at {}% (~{} min remaining). Save your work!",
+                charge, runtime
+            ),
+            urgency: Urgency::Critical,
+            icon: "battery-low",
+        });
     }
 
     if newly_fsd {
-        let _ = send_notification(
-            "🔴 UPS: Shutdown Imminent",
-            "Forced shutdown in progress. Save immediately!",
-            Urgency::Critical,
-            "dialog-error",
-        )
-        .await;
+        out.push(Notification {
+            summary: "🔴 UPS: Shutdown Imminent",
+            body: "Forced shutdown in progress. Save immediately!".to_string(),
+            urgency: Urgency::Critical,
+            icon: "dialog-error",
+        });
     }
 
     if newly_power_restored {
-        let charge = new_state.battery_charge.unwrap_or(0.0);
-        let body = format!("Mains power restored. Battery at {}%", charge);
-        let _ = send_notification(
-            "UPS: Power Restored",
-            &body,
-            Urgency::Low,
-            "battery-charging",
-        )
-        .await;
+        let charge = new.battery_charge.unwrap_or(0.0);
+        out.push(Notification {
+            summary: "UPS: Power Restored",
+            body: format!("Mains power restored. Battery at {}%", charge),
+            urgency: Urgency::Low,
+            icon: "battery-charging",
+        });
     }
 
     if newly_replace_battery {
-        let _ = send_notification(
-            "UPS: Replace Battery",
-            "UPS reports battery replacement needed.",
-            Urgency::Normal,
-            "dialog-warning",
-        )
-        .await;
+        out.push(Notification {
+            summary: "UPS: Replace Battery",
+            body: "UPS reports battery replacement needed.".to_string(),
+            urgency: Urgency::Normal,
+            icon: "dialog-warning",
+        });
+    }
+
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ups_state::{UpsState, UpsStatus};
+
+    fn connected(flags: Vec<StatusFlag>) -> UpsState {
+        UpsState {
+            name: "myups".to_string(),
+            status: UpsStatus { flags },
+            connection_ok: true,
+            ..Default::default()
+        }
+    }
+
+    fn disconnected() -> UpsState {
+        UpsState::default()
+    }
+
+    fn summaries(ns: &[Notification]) -> Vec<&'static str> {
+        ns.iter().map(|n| n.summary).collect()
+    }
+
+    #[test]
+    fn connected_to_lost_fires_connection_lost_once() {
+        let prev = connected(vec![StatusFlag::Online]);
+        let lost = disconnected();
+        let first = transition_notifications(Some(&prev), &lost);
+        assert_eq!(summaries(&first), vec!["UPS: Connection Lost"]);
+
+        // A second consecutive failure must not re-fire.
+        let again = transition_notifications(Some(&lost), &lost);
+        assert!(again.is_empty());
+    }
+
+    #[test]
+    fn lost_to_connected_fires_connection_restored() {
+        let prev = disconnected();
+        let new = connected(vec![StatusFlag::Online]);
+        let ns = transition_notifications(Some(&prev), &new);
+        assert_eq!(summaries(&ns), vec!["UPS: Connection Restored"]);
+    }
+
+    #[test]
+    fn first_healthy_poll_fires_nothing() {
+        let new = connected(vec![StatusFlag::Online]);
+        let ns = transition_notifications(None, &new);
+        assert!(ns.is_empty());
+    }
+
+    #[test]
+    fn first_on_battery_poll_fires_on_battery_not_restored() {
+        let new = connected(vec![StatusFlag::OnBattery, StatusFlag::Discharging]);
+        let ns = transition_notifications(None, &new);
+        assert_eq!(summaries(&ns), vec!["UPS: On Battery"]);
+    }
+
+    #[test]
+    fn reconnect_already_on_battery_fires_restored_and_on_battery() {
+        let prev = disconnected();
+        let new = connected(vec![StatusFlag::OnBattery, StatusFlag::Discharging]);
+        let ns = transition_notifications(Some(&prev), &new);
+        assert_eq!(
+            summaries(&ns),
+            vec!["UPS: Connection Restored", "UPS: On Battery"]
+        );
+    }
+
+    #[test]
+    fn on_battery_to_online_fires_power_restored() {
+        let prev = connected(vec![StatusFlag::OnBattery]);
+        let new = connected(vec![StatusFlag::Online]);
+        let ns = transition_notifications(Some(&prev), &new);
+        assert_eq!(summaries(&ns), vec!["UPS: Power Restored"]);
     }
 }

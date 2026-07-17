@@ -21,10 +21,10 @@ Item {
         anchors.fill: parent
         contentWidth: availableWidth
         clip: true
+        padding: 15
 
         ColumnLayout {
             width: parent.width
-            anchors.margins: 15
             spacing: 20
 
             // Device Information
@@ -54,7 +54,7 @@ Item {
                     Layout.fillWidth: true
                     Label { text: "Firmware"; color: palette.placeholderText }
                     Item { Layout.fillWidth: true }
-                    Label { text: "v" + root.firmware; font.bold: true }
+                    Label { text: root.firmware === "—" ? "—" : "v" + root.firmware; font.bold: true }
                 }
                 RowLayout {
                     Layout.fillWidth: true
@@ -111,7 +111,7 @@ Item {
                     Layout.fillWidth: true
                     Label { text: "Battery Charge"; color: palette.placeholderText }
                     Item { Layout.fillWidth: true }
-                    Label { text: root.batteryCharge + "%"; font.bold: true }
+                    Label { text: !isNaN(parseInt(root.batteryCharge)) ? root.batteryCharge + "%" : "—"; font.bold: true }
                 }
             }
 
