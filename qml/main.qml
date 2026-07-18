@@ -26,8 +26,38 @@ ApplicationWindow {
         }
     }
 
+    color: appTheme.window
+
     Backend {
         id: backend
+    }
+
+    Theme {
+        id: appTheme
+    }
+
+    // Single source of truth for which state we are in. The tray icon, the hero
+    // colour and the alert pulse all derive from this rather than each
+    // re-parsing status_text.
+    readonly property string upsState: {
+        if (backend.status_text === "Disconnected"
+                || backend.status_text === "Connecting..."
+                || backend.status_text === "Initializing...")
+            return "disconnected"
+        var flags = backend.status_text.split(", ")
+        if (flags.indexOf("Low Battery") !== -1)
+            return "lowBattery"
+        if (flags.indexOf("On Battery") !== -1)
+            return "onBattery"
+        return "online"
+    }
+
+    function runtimeLabel(minutes) {
+        if (minutes < 0)
+            return "—"
+        var h = Math.floor(minutes / 60)
+        var m = minutes % 60
+        return h + "h " + (m < 10 ? "0" : "") + m + "m"
     }
 
     Component.onCompleted: {
@@ -50,16 +80,12 @@ ApplicationWindow {
         visible: true
         icon.source: {
             var base = "qrc:/qt/qml/com/upstray/app/resources/icons/upstray-"
-            if (backend.status_text === "Disconnected"
-                    || backend.status_text === "Connecting..."
-                    || backend.status_text === "Initializing...")
-                return base + "disconnected.svg"
-            var flags = backend.status_text.split(", ")
-            if (flags.indexOf("Low Battery") !== -1)
-                return base + "lowbattery.svg"
-            if (flags.indexOf("On Battery") !== -1)
-                return base + "onbattery.svg"
-            return base + "online.svg"
+            switch (mainWindow.upsState) {
+            case "disconnected": return base + "disconnected.svg"
+            case "lowBattery":   return base + "lowbattery.svg"
+            case "onBattery":    return base + "onbattery.svg"
+            default:             return base + "online.svg"
+            }
         }
         tooltip: {
             var charge = isNaN(parseInt(backend.battery_charge)) ? "—" : backend.battery_charge + "%"
@@ -109,54 +135,27 @@ ApplicationWindow {
         anchors.margins: 10
         spacing: 10
 
-        // Header
-        RowLayout {
+        Hero {
             Layout.fillWidth: true
-            spacing: 10
-            
-            Label {
-                text: "⏻ UPS Monitor"
-                font.bold: true
-                font.pixelSize: 18
-            }
-
-            Item { Layout.fillWidth: true } // spacer to push badges to right
-
-            // Connection Badge
-            Rectangle {
-                color: "transparent"
-                border.color: palette.mid
-                radius: 12
-                implicitWidth: connectionLabel.implicitWidth + 16
-                implicitHeight: connectionLabel.implicitHeight + 8
-                Label {
-                    id: connectionLabel
-                    anchors.centerIn: parent
-                    text: backend.connection_type === "USB" ? "🔌 USB" : "🌐 " + backend.connection_type
-                    font.pixelSize: 12
+            theme: appTheme
+            chargePct: backend.battery_charge_pct
+            stateColor: appTheme[mainWindow.upsState]
+            alert: mainWindow.upsState !== "online"
+            runtimeText: mainWindow.runtimeLabel(backend.runtime_minutes)
+            statusText: {
+                switch (mainWindow.upsState) {
+                case "disconnected": return backend.status_text.toUpperCase()
+                case "lowBattery":   return qsTr("LOW BATTERY")
+                case "onBattery":    return qsTr("ON BATTERY")
+                default:             return qsTr("ONLINE")
                 }
             }
-            // Status Badge
-            Rectangle {
-                property bool isOnline: backend.status_text.split(", ").indexOf("Online") !== -1
-                color: isOnline ? "#052e16" : (backend.status_text === "Disconnected" ? palette.midlight : "#450a0a") // Very dark shade
-                radius: 6 // Squircle shape instead of pill
-                implicitWidth: statusLabel.implicitWidth + 24 // Added padding at ends
-                implicitHeight: statusLabel.implicitHeight + 8
-                RowLayout {
-                    anchors.centerIn: parent
-                    spacing: 6
-                    Rectangle { 
-                        width: 8; height: 8; radius: 4
-                        color: parent.parent.isOnline ? "#22c55e" : (backend.status_text === "Disconnected" ? palette.text : "#ef4444") 
-                    }
-                    Label {
-                        id: statusLabel
-                        text: parent.parent.isOnline ? "Online" : (backend.status_text === "Disconnected" ? "Disconnected" : backend.status_text)
-                        color: "white"
-                        font.bold: true
-                        font.pixelSize: 12
-                    }
+            detailText: {
+                switch (mainWindow.upsState) {
+                case "disconnected": return qsTr("No connection to NUT server. Retrying…")
+                case "lowBattery":   return qsTr("Battery critical. Save work — shutdown imminent.")
+                case "onBattery":    return qsTr("Utility power lost. Discharging battery.")
+                default:             return qsTr("Running on utility power.")
                 }
             }
         }

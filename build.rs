@@ -4,6 +4,9 @@ fn main() {
     CxxQtBuilder::new_qml_module(
         QmlModule::new("com.upstray.app")
             .qml_file("qml/main.qml")
+            .qml_file("qml/Theme.qml")
+            .qml_file("qml/components/ChargeRing.qml")
+            .qml_file("qml/components/Hero.qml")
             .qml_file("qml/components/MonitorTab.qml")
             .qml_file("qml/components/DetailsTab.qml")
             .qml_file("qml/components/SettingsTab.qml"),
