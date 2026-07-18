@@ -230,6 +230,7 @@ ApplicationWindow {
                     inputVoltage: backend.input_voltage
                     outputVoltage: backend.output_voltage
                     frequency: backend.frequency
+                    efficiency: backend.efficiency
                     powerWatts: backend.power_watts
                     temperature: backend.temperature
                     loadPercentage: backend.load_percentage

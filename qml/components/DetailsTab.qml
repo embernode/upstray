@@ -3,6 +3,11 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 // Everything the UPS reports about itself, grouped into identity and power.
+//
+// Rows the device does not report hide themselves, and a group whose rows are
+// all missing hides along with its heading — so this lists what the hardware
+// actually knows rather than a column of dashes. Not every UPS reports every
+// variable; efficiency in particular is absent on many.
 Item {
     id: root
 
@@ -16,10 +21,34 @@ Item {
     property string inputVoltage: ""
     property string outputVoltage: ""
     property string frequency: ""
+    property string efficiency: ""
     property string powerWatts: "—"
     property string temperature: "—"
     property string loadPercentage: ""
     property string batteryCharge: ""
+
+    readonly property string _firmwareText: firmware === "—" || firmware.length === 0
+                                            ? firmware : "v" + firmware
+    readonly property string _loadText: powerWatts === "—" ? loadPercentage
+                                                           : loadPercentage + " · " + powerWatts
+    readonly property string _chargeText: isNaN(parseInt(batteryCharge)) ? "—"
+                                                                        : batteryCharge + "%"
+
+    // True when any supplied value carries something to show. Reads every
+    // entry rather than returning early, so it re-evaluates whenever any of
+    // them changes.
+    function _any(values) {
+        var found = false
+        for (var i = 0; i < values.length; i++) {
+            if (values[i] !== undefined && values[i].length > 0 && values[i] !== "—")
+                found = true
+        }
+        return found
+    }
+
+    readonly property bool _hasDevice: _any([model, serialNumber, _firmwareText, connection])
+    readonly property bool _hasPower: _any([inputVoltage, outputVoltage, frequency, efficiency,
+                                            _loadText, temperature, _chargeText])
 
     // Flickable rather than ScrollView: ScrollView creates its own scroll bars,
     // and assigning one to it puts the assigned bar at the origin — it rendered
@@ -61,6 +90,7 @@ Item {
                 Layout.leftMargin: 18
                 Layout.topMargin: 18
                 Layout.bottomMargin: 10
+                visible: root._hasDevice
                 theme: root.theme
                 text: qsTr("Device")
             }
@@ -70,6 +100,7 @@ Item {
                 Layout.leftMargin: 18
                 Layout.rightMargin: 18 + scroller.gutter
                 Layout.preferredHeight: deviceRows.implicitHeight + 8
+                visible: root._hasDevice
                 theme: root.theme
 
                 ColumnLayout {
@@ -97,14 +128,13 @@ Item {
                         Layout.fillWidth: true
                         theme: root.theme
                         label: qsTr("Firmware")
-                        value: root.firmware === "—" ? root.firmware : "v" + root.firmware
+                        value: root._firmwareText
                     }
                     DetailRow {
                         Layout.fillWidth: true
                         theme: root.theme
                         label: qsTr("Connection")
                         value: root.connection
-                        last: true
                     }
                 }
             }
@@ -113,6 +143,7 @@ Item {
                 Layout.leftMargin: 18
                 Layout.topMargin: 20
                 Layout.bottomMargin: 10
+                visible: root._hasPower
                 theme: root.theme
                 color: root.theme.headingPower
                 text: qsTr("Power metrics")
@@ -124,6 +155,7 @@ Item {
                 Layout.rightMargin: 18 + scroller.gutter
                 Layout.bottomMargin: 24
                 Layout.preferredHeight: powerRows.implicitHeight + 8
+                visible: root._hasPower
                 theme: root.theme
 
                 ColumnLayout {
@@ -156,9 +188,14 @@ Item {
                     DetailRow {
                         Layout.fillWidth: true
                         theme: root.theme
+                        label: qsTr("Efficiency")
+                        value: root.efficiency
+                    }
+                    DetailRow {
+                        Layout.fillWidth: true
+                        theme: root.theme
                         label: qsTr("Load")
-                        value: root.powerWatts === "—" ? root.loadPercentage
-                                                       : root.loadPercentage + " · " + root.powerWatts
+                        value: root._loadText
                     }
                     DetailRow {
                         Layout.fillWidth: true
@@ -170,8 +207,7 @@ Item {
                         Layout.fillWidth: true
                         theme: root.theme
                         label: qsTr("Battery Charge")
-                        value: isNaN(parseInt(root.batteryCharge)) ? "—" : root.batteryCharge + "%"
-                        last: true
+                        value: root._chargeText
                     }
                 }
             }
