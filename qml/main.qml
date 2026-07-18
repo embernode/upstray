@@ -132,8 +132,9 @@ ApplicationWindow {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 10
-        spacing: 10
+        // Sections carry their own padding so the hero, tab strip and its
+        // hairline all run edge to edge.
+        spacing: 0
 
         Hero {
             Layout.fillWidth: true
@@ -160,44 +161,10 @@ ApplicationWindow {
             }
         }
 
-        // Custom Tab segmented control
-        Rectangle {
+        TabStrip {
             id: customTabBarContainer
             Layout.fillWidth: true
-            Layout.preferredHeight: 38
-            color: palette.alternateBase
-            radius: 8
-
-            property int currentIndex: 0
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.margins: 4
-                spacing: 4
-
-                Repeater {
-                    model: ["📈 Monitor", "📊 Details", "⚡ Settings"]
-                    delegate: Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: customTabBarContainer.currentIndex === index ? palette.base : "transparent"
-                        radius: 6
-
-                        Label {
-                            anchors.centerIn: parent
-                            text: modelData
-                            color: customTabBarContainer.currentIndex === index ? palette.text : palette.placeholderText
-                            font.bold: customTabBarContainer.currentIndex === index
-                            font.pixelSize: 13
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: customTabBarContainer.currentIndex = index
-                        }
-                    }
-                }
-            }
+            theme: appTheme
         }
 
         StackLayout {
