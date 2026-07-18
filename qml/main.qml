@@ -206,16 +206,18 @@ ApplicationWindow {
             currentIndex: customTabBarContainer.currentIndex
 
             MonitorTab {
-                upsName: backend.manufacturer_model
-                statusText: backend.status_text
-                batteryCharge: backend.battery_charge
-                runtimeText: backend.runtime_text
+                theme: appTheme
+                stateColor: appTheme[mainWindow.upsState]
+                connected: mainWindow.upsState !== "disconnected"
+                onUtility: mainWindow.upsState === "online"
                 inputVoltage: backend.input_voltage
                 outputVoltage: backend.output_voltage
                 loadPercentage: backend.load_percentage
+                powerWatts: backend.power_watts
                 temperature: backend.temperature
-                healthStatus: backend.health
-                connectionType: backend.connection_type
+                frequency: backend.frequency
+                health: backend.health
+                loadPct: backend.load_pct
             }
 
             DetailsTab {

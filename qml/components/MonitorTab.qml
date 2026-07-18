@@ -1,232 +1,198 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Layouts
 
+// Live power view: where power is flowing, how hard the UPS is working, and
+// the three figures worth watching while it does.
 Item {
     id: root
 
-    property string upsName: ""
-    property string statusText: ""
-    property string batteryCharge: ""
-    property string runtimeText: ""
-    property string inputVoltage: ""
-    property string outputVoltage: ""
-    property string loadPercentage: ""
-    property string temperature: ""
-    property string healthStatus: ""
-    property string connectionType: "USB"
+    property var theme
+    property color stateColor: theme ? theme.online : "#2ecc71"
+    // False while on battery — dims the utility-side arrow and reddens the input.
+    property bool onUtility: true
+    property bool connected: true
+
+    property string inputVoltage: "—"
+    property string outputVoltage: "—"
+    property string loadPercentage: "—"
+    property string powerWatts: "—"
+    property string temperature: "—"
+    property string frequency: "—"
+    property string health: ""
+    property real loadPct: -1
+
+    readonly property color _idle: theme ? Qt.rgba(theme.textMuted.r, theme.textMuted.g,
+                                                   theme.textMuted.b, 0.45)
+                                        : "#3a4049"
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 15
-        spacing: 15
+        anchors.margins: 18
+        spacing: 16
 
-        // Battery Status
-        ColumnLayout {
-            id: batterySection
-            Layout.fillWidth: true
-            spacing: 6
-
-            property bool chargeKnown: !isNaN(parseInt(root.batteryCharge))
-
-            RowLayout {
-                Layout.fillWidth: true
-                Label {
-                    text: "\uD83D\uDD0B"
-                    font.pixelSize: 14
-                    color: !batterySection.chargeKnown ? palette.placeholderText : (parseInt(root.batteryCharge) > 60 ? "#22c55e" : (parseInt(root.batteryCharge) > 30 ? "#eab308" : "#ef4444"))
-                }
-                Label {
-                    text: "Battery"
-                    font.pixelSize: 14
-                    color: palette.text
-                }
-                Item { Layout.fillWidth: true }
-                Label {
-                    text: batterySection.chargeKnown ? root.batteryCharge + "%" : "\u2014"
-                    font.bold: true
-                    font.pixelSize: 14
-                    color: !batterySection.chargeKnown ? palette.placeholderText : (parseInt(root.batteryCharge) > 60 ? "#22c55e" : (parseInt(root.batteryCharge) > 30 ? "#eab308" : "#ef4444"))
-                }
-            }
-            // Custom progress bar (bypasses Breeze style override)
-            Rectangle {
-                Layout.fillWidth: true
-                height: 6
-                radius: 3
-                color: palette.placeholderText
-                opacity: 0.3
-
-                Rectangle {
-                    width: {
-                        if (!batterySection.chargeKnown) return parent.width;
-                        var pct = parseInt(root.batteryCharge);
-                        return (pct / 100.0) * parent.width;
-                    }
-                    height: parent.height
-                    radius: 3
-                    color: !batterySection.chargeKnown ? palette.placeholderText : (parseInt(root.batteryCharge) > 60 ? "#22c55e" : (parseInt(root.batteryCharge) > 30 ? "#eab308" : "#ef4444"))
-                    opacity: 1.0
-                }
-            }
-        }
-
-        // Load Status
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 6
-            RowLayout {
-                Layout.fillWidth: true
-                Label {
-                    text: "\u223F" // Squiggly for load
-                    color: "#3b82f6"
-                    font.pixelSize: 16
-                }
-                Label {
-                    text: "Load"
-                    font.pixelSize: 14
-                }
-                Item { Layout.fillWidth: true }
-                Label {
-                    text: root.loadPercentage
-                    font.bold: true
-                    font.pixelSize: 14
-                }
-            }
-            // Custom progress bar (bypasses Breeze style override)
-            Rectangle {
-                Layout.fillWidth: true
-                height: 6
-                radius: 3
-                color: palette.placeholderText
-                opacity: 0.3
-
-                Rectangle {
-                    width: {
-                        var pct = parseFloat(root.loadPercentage);
-                        return isNaN(pct) ? 0 : (pct / 100.0) * parent.width;
-                    }
-                    height: parent.height
-                    radius: 3
-                    color: palette.text
-                    opacity: 1.0
-                }
-            }
-        }
-
+        // ---- power flow strip ----
         Rectangle {
             Layout.fillWidth: true
-            height: 1
-            color: palette.mid
-        }
+            Layout.preferredHeight: 74
+            radius: root.theme ? root.theme.radiusCard : 12
+            color: root.theme ? root.theme.surface : "transparent"
+            border.width: 1
+            border.color: root.theme ? root.theme.border : "transparent"
 
-        // Grid Info
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 20
+            RowLayout {
+                anchors.fill: parent
+                spacing: 0
 
-            // Column 1 Wrapper
-            Item {
-                Layout.fillWidth: true
-                Layout.minimumWidth: 100
-                Layout.preferredHeight: col1Layout.implicitHeight
-                
-                ColumnLayout {
-                    id: col1Layout
-                    anchors.fill: parent
-                    spacing: 20
-
-                    ColumnLayout {
-                        spacing: 2
-                        RowLayout {
-                            spacing: 4
-                            Label { text: "⏱"; color: palette.placeholderText; font.pixelSize: 12 }
-                            Label { text: "Runtime"; color: palette.placeholderText; font.pixelSize: 12 }
-                        }
-                        Label { text: root.runtimeText.replace(" min", "m"); font.bold: true; font.pixelSize: 14 }
-                    }
-
-                    ColumnLayout {
-                        spacing: 2
-                        RowLayout {
-                            spacing: 4
-                            Label { text: "↘"; color: palette.placeholderText; font.pixelSize: 12 }
-                            Label { text: "Input"; color: palette.placeholderText; font.pixelSize: 12 }
-                        }
-                        Label { text: root.inputVoltage; font.bold: true; font.pixelSize: 14 }
-                    }
+                FlowCell {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    theme: root.theme
+                    caption: qsTr("Utility in")
+                    value: root.inputVoltage
+                    // Input reads red once mains is gone, not merely grey.
+                    valueColor: !root.connected ? (root.theme ? root.theme.textMuted : "#7f8896")
+                              : root.onUtility  ? root.stateColor
+                                                : (root.theme ? root.theme.lowBattery : "#e5484d")
                 }
-            }
 
-            // Column 2 Wrapper
-            Item {
-                Layout.fillWidth: true
-                Layout.minimumWidth: 100
-                Layout.preferredHeight: col2Layout.implicitHeight
+                FlowArrow {
+                    Layout.alignment: Qt.AlignVCenter
+                    arrowColor: root.connected && root.onUtility ? root.stateColor : root._idle
+                }
 
-                ColumnLayout {
-                    id: col2Layout
-                    anchors.fill: parent
-                    spacing: 20
+                FlowCell {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    theme: root.theme
+                    caption: qsTr("Load")
+                    value: root.loadPercentage
+                    showDividers: true
+                    valueColor: root.connected ? root.stateColor
+                                               : (root.theme ? root.theme.textMuted : "#7f8896")
+                }
 
-                    ColumnLayout {
-                        spacing: 2
-                        RowLayout {
-                            spacing: 4
-                            Label { text: "🌡"; color: palette.placeholderText; font.pixelSize: 12 }
-                            Label { text: "Temperature"; color: palette.placeholderText; font.pixelSize: 12 }
-                        }
-                        Label { text: root.temperature; font.bold: true; font.pixelSize: 14 }
-                    }
+                FlowArrow {
+                    Layout.alignment: Qt.AlignVCenter
+                    arrowColor: root.connected ? root.stateColor : root._idle
+                }
 
-                    ColumnLayout {
-                        spacing: 2
-                        RowLayout {
-                            spacing: 4
-                            Label { text: "↗"; color: palette.placeholderText; font.pixelSize: 12 }
-                            Label { text: "Output"; color: palette.placeholderText; font.pixelSize: 12 }
-                        }
-                        Label { text: root.outputVoltage; font.bold: true; font.pixelSize: 14 }
-                    }
+                FlowCell {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    theme: root.theme
+                    caption: qsTr("Output")
+                    value: root.outputVoltage
                 }
             }
         }
 
+        // ---- load bar ----
         Rectangle {
             Layout.fillWidth: true
-            height: 1
-            color: palette.mid
+            Layout.preferredHeight: 74
+            radius: root.theme ? root.theme.radiusCard : 12
+            color: root.theme ? root.theme.surface : "transparent"
+            border.width: 1
+            border.color: root.theme ? root.theme.border : "transparent"
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Text {
+                        text: qsTr("Load")
+                        color: root.theme ? root.theme.textSecondary : "#aeb4bd"
+                        font.family: root.theme ? root.theme.fontSans : "sans-serif"
+                        font.pixelSize: 12
+                        font.weight: Font.DemiBold
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text {
+                        text: root.powerWatts === "—" ? root.loadPercentage
+                                                      : root.loadPercentage + " · " + root.powerWatts
+                        color: root.theme ? root.theme.textPrimary : "#e7eaee"
+                        font.family: root.theme ? root.theme.fontMono : "monospace"
+                        font.pixelSize: 14
+                        font.weight: Font.Bold
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 8
+                    radius: 5
+                    color: root.theme ? root.theme.track : "#22ffffff"
+
+                    Rectangle {
+                        height: parent.height
+                        radius: parent.radius
+                        width: root.loadPct >= 0 ? parent.width * Math.min(100, root.loadPct) / 100 : 0
+                        visible: width > 0
+
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: root.theme ? root.theme.online : "#2ecc71" }
+                            GradientStop { position: 1.0; color: root.theme ? root.theme.accent : "#5cc8ff" }
+                        }
+
+                        Behavior on width {
+                            NumberAnimation { duration: 400; easing.type: Easing.OutCubic }
+                        }
+                    }
+                }
+            }
         }
 
-        // Footer System Health
+        // ---- metric grid ----
         RowLayout {
             Layout.fillWidth: true
-            RowLayout {
-                spacing: 4
-                Label { text: "⚡"; color: palette.placeholderText; font.pixelSize: 14 }
-                Label {
-                    text: "System Health"
-                    color: palette.placeholderText
-                    font.pixelSize: 13
-                }
+            spacing: 12
+
+            StatCard {
+                Layout.fillWidth: true
+                theme: root.theme
+                caption: qsTr("Temp")
+                value: root.temperature
             }
-            Item { Layout.fillWidth: true }
-            Rectangle {
-                color: root.healthStatus === "good" ? palette.text : (root.healthStatus === "warning" ? "#FFC107" : "#ef4444")
-                radius: 6
-                implicitWidth: healthLabel.implicitWidth + 24
-                implicitHeight: healthLabel.implicitHeight + 10
-                Label {
-                    id: healthLabel
-                    anchors.centerIn: parent
-                    text: root.healthStatus.charAt(0).toUpperCase() + root.healthStatus.slice(1)
-                    color: root.healthStatus === "good" ? palette.base : "white"
-                    font.bold: true
-                    font.pixelSize: 12
+
+            StatCard {
+                Layout.fillWidth: true
+                theme: root.theme
+                caption: qsTr("Freq")
+                value: root.frequency
+            }
+
+            StatCard {
+                Layout.fillWidth: true
+                theme: root.theme
+                caption: qsTr("Health")
+                value: {
+                    switch (root.health) {
+                    case "good":     return qsTr("Good")
+                    case "warning":  return qsTr("Warning")
+                    case "critical": return qsTr("Critical")
+                    default:         return "—"
+                    }
+                }
+                valueColor: {
+                    if (!root.theme)
+                        return "#e7eaee"
+                    switch (root.health) {
+                    case "good":     return root.theme.online
+                    case "warning":  return root.theme.onBattery
+                    case "critical": return root.theme.lowBattery
+                    default:         return root.theme.textMuted
+                    }
                 }
             }
         }
-        
+
         Item { Layout.fillHeight: true }
     }
 }

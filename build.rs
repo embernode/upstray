@@ -7,6 +7,9 @@ fn main() {
             .qml_file("qml/Theme.qml")
             .qml_file("qml/components/ChargeRing.qml")
             .qml_file("qml/components/Hero.qml")
+            .qml_file("qml/components/FlowArrow.qml")
+            .qml_file("qml/components/FlowCell.qml")
+            .qml_file("qml/components/StatCard.qml")
             .qml_file("qml/components/MonitorTab.qml")
             .qml_file("qml/components/DetailsTab.qml")
             .qml_file("qml/components/SettingsTab.qml"),
