@@ -20,19 +20,14 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
 
+        // Travel per wheel notch.
+        readonly property real wheelStep: 130
+
         ScrollBar.vertical: ScrollBar {
             id: scrollBar
             policy: ScrollBar.AsNeeded
         }
 
-        WheelHandler {
-            acceptedDevices: PointerDevice.Mouse
-            onWheel: function (event) {
-                const limit = Math.max(0, scroller.contentHeight - scroller.height)
-                const delta = (event.angleDelta.y / 120) * 90
-                scroller.contentY = Math.max(0, Math.min(limit, scroller.contentY - delta))
-            }
-        }
 
         readonly property real gutter: scrollBar.visible ? scrollBar.width : 0
 
@@ -289,4 +284,28 @@ Item {
             }
         }
     }
+
+    // Wheel scrolling goes through MouseArea, not WheelHandler: verified with a
+    // probe racing the two, WheelHandler receives no wheel events at all on this
+    // setup while MouseArea does. Without this, scrolling falls back to
+    // Flickable's built-in handling, which is only a few pixels per detent.
+    //
+    // acceptedButtons is NoButton so this takes the wheel only and lets clicks
+    // through to whatever is underneath.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.NoButton
+        onWheel: function (wheel) {
+            const limit = Math.max(0, scroller.contentHeight - scroller.height)
+            // angleDelta is eighths of a degree, 120 to a detent. A
+            // high-resolution wheel sends fractions of that which sum to 120 per
+            // detent, so scaling proportionally gives one step per detent either
+            // way. pixelDelta is the fallback for devices that send only that.
+            const delta = wheel.angleDelta.y !== 0
+                        ? (wheel.angleDelta.y / 120) * scroller.wheelStep
+                        : wheel.pixelDelta.y
+            scroller.contentY = Math.max(0, Math.min(limit, scroller.contentY - delta))
+        }
+    }
+
 }
