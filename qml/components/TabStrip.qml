@@ -16,7 +16,11 @@ Item {
     readonly property var _tabs: [
         {
             label: qsTr("Monitor"),
-            path: "M4 13a8 8 0 0 1 16 0 M12 13l4-3",
+            // Shifted down 3 units from the design's path: the gauge arc
+            // occupies only the upper part of the 24x24 box (ink y 4-14,
+            // centre 9), so centring the box left the glyph riding high
+            // against the label. The other two icons are already centred.
+            path: "M4 16a8 8 0 0 1 16 0 M12 16l4-3",
             filled: false
         },
         {
