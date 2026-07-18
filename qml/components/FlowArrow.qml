@@ -3,12 +3,18 @@ import QtQuick.Shapes
 
 // Direction-of-power indicator between two cells of the flow strip.
 // Drawn rather than a glyph so the weight matches the rest of the UI.
+//
+// The glyph is centred in the item and the item is wider than the glyph, so it
+// keeps clear air either side of the neighbouring cell dividers.
 Item {
     id: root
 
     property color arrowColor: "#2ecc71"
+    readonly property real _span: 20
+    readonly property real _x0: (width - _span) / 2
+    readonly property real _x1: _x0 + _span
 
-    implicitWidth: 30
+    implicitWidth: 46
     implicitHeight: 18
 
     Shape {
@@ -22,8 +28,8 @@ Item {
             capStyle: ShapePath.RoundCap
             joinStyle: ShapePath.RoundJoin
 
-            startX: 2; startY: root.height / 2
-            PathLine { x: 22; y: root.height / 2 }
+            startX: root._x0; startY: root.height / 2
+            PathLine { x: root._x1; y: root.height / 2 }
         }
 
         ShapePath {
@@ -33,9 +39,9 @@ Item {
             capStyle: ShapePath.RoundCap
             joinStyle: ShapePath.RoundJoin
 
-            startX: 16; startY: root.height / 2 - 5
-            PathLine { x: 22; y: root.height / 2 }
-            PathLine { x: 16; y: root.height / 2 + 5 }
+            startX: root._x1 - 6; startY: root.height / 2 - 5
+            PathLine { x: root._x1; y: root.height / 2 }
+            PathLine { x: root._x1 - 6; y: root.height / 2 + 5 }
         }
     }
 

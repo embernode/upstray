@@ -1,9 +1,9 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Window 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Window
+import QtQuick.Layouts
 import Qt.labs.platform 1.1 as Platform
-import QtQml 2.15
+import QtQml
 
 import com.upstray.app 1.0
 import "components"
@@ -14,7 +14,13 @@ ApplicationWindow {
     height: 550
     visible: false
     title: qsTr("UpsTray")
-    
+
+    // Frameless: the title bar is drawn in-window so the state glow can bleed
+    // through it. Transparent so the rounded shell corners are not squared off
+    // by the window background.
+    flags: Qt.Window | Qt.FramelessWindowHint
+    color: "transparent"
+
     // Hide instead of close when the window X button is clicked, but if no tray
     // is available there is nowhere to hide to, so actually quit.
     onClosing: function(close_event) {
@@ -26,8 +32,6 @@ ApplicationWindow {
         }
     }
 
-    color: appTheme.window
-
     Backend {
         id: backend
     }
@@ -37,8 +41,8 @@ ApplicationWindow {
     }
 
     // Single source of truth for which state we are in. The tray icon, the hero
-    // colour and the alert pulse all derive from this rather than each
-    // re-parsing status_text.
+    // colour, the glow and the alert pulse all derive from this rather than
+    // each re-parsing status_text.
     readonly property string upsState: {
         if (backend.status_text === "Disconnected"
                 || backend.status_text === "Connecting..."
@@ -91,7 +95,7 @@ ApplicationWindow {
             var charge = isNaN(parseInt(backend.battery_charge)) ? "—" : backend.battery_charge + "%"
             return "UPS: " + backend.status_text + "\nBattery: " + charge + "\nRuntime: " + backend.runtime_text
         }
-        
+
         onActivated: function(reason) {
             if (reason === Platform.SystemTrayIcon.Trigger) {
                 if (mainWindow.visible) {
@@ -130,78 +134,106 @@ ApplicationWindow {
         }
     }
 
-    ColumnLayout {
+    Rectangle {
+        id: shell
         anchors.fill: parent
-        // Sections carry their own padding so the hero, tab strip and its
-        // hairline all run edge to edge.
-        spacing: 0
+        radius: 16
+        color: appTheme.window
+        clip: true
 
-        Hero {
-            Layout.fillWidth: true
-            theme: appTheme
-            chargePct: backend.battery_charge_pct
-            stateColor: appTheme[mainWindow.upsState]
-            alert: mainWindow.upsState !== "online"
-            runtimeText: mainWindow.runtimeLabel(backend.runtime_minutes)
-            statusText: {
-                switch (mainWindow.upsState) {
-                case "disconnected": return backend.status_text.toUpperCase()
-                case "lowBattery":   return qsTr("LOW BATTERY")
-                case "onBattery":    return qsTr("ON BATTERY")
-                default:             return qsTr("ONLINE")
-                }
-            }
-            detailText: {
-                switch (mainWindow.upsState) {
-                case "disconnected": return qsTr("No connection to NUT server. Retrying…")
-                case "lowBattery":   return qsTr("Battery critical. Save work — shutdown imminent.")
-                case "onBattery":    return qsTr("Utility power lost. Discharging battery.")
-                default:             return qsTr("Running on utility power.")
-                }
-            }
+        // Sits under the content, above the shell fill.
+        GlowOverlay {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: 220
+            glowColor: appTheme[mainWindow.upsState]
+            intensity: appTheme.dark ? 0.22 : 0.14
         }
 
-        TabStrip {
-            id: customTabBarContainer
-            Layout.fillWidth: true
-            theme: appTheme
-        }
+        ColumnLayout {
+            anchors.fill: parent
+            // Sections carry their own padding so the title bar, hero and the
+            // tab strip hairline all run edge to edge.
+            spacing: 0
 
-        StackLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            currentIndex: customTabBarContainer.currentIndex
-
-            MonitorTab {
+            TitleBar {
+                Layout.fillWidth: true
                 theme: appTheme
+                deviceName: backend.ups_name
+                onMinimiseRequested: mainWindow.showMinimized()
+                onCloseRequested: mainWindow.close()
+            }
+
+            Hero {
+                Layout.fillWidth: true
+                theme: appTheme
+                chargePct: backend.battery_charge_pct
                 stateColor: appTheme[mainWindow.upsState]
-                connected: mainWindow.upsState !== "disconnected"
-                onUtility: mainWindow.upsState === "online"
-                inputVoltage: backend.input_voltage
-                outputVoltage: backend.output_voltage
-                loadPercentage: backend.load_percentage
-                powerWatts: backend.power_watts
-                temperature: backend.temperature
-                frequency: backend.frequency
-                health: backend.health
-                loadPct: backend.load_pct
+                alert: mainWindow.upsState !== "online"
+                runtimeText: mainWindow.runtimeLabel(backend.runtime_minutes)
+                statusText: {
+                    switch (mainWindow.upsState) {
+                    case "disconnected": return backend.status_text.toUpperCase()
+                    case "lowBattery":   return qsTr("LOW BATTERY")
+                    case "onBattery":    return qsTr("ON BATTERY")
+                    default:             return qsTr("ONLINE")
+                    }
+                }
+                detailText: {
+                    switch (mainWindow.upsState) {
+                    case "disconnected": return qsTr("No connection to NUT server. Retrying…")
+                    case "lowBattery":   return qsTr("Battery critical. Save work — shutdown imminent.")
+                    case "onBattery":    return qsTr("Utility power lost. Discharging battery.")
+                    default:             return qsTr("Running on utility power.")
+                    }
+                }
             }
 
-            DetailsTab {
-                model: backend.manufacturer_model
-                serialNumber: backend.serial_number
-                firmware: backend.firmware_version
-                connection: backend.connection_type
-                inputVoltage: backend.input_voltage
-                outputVoltage: backend.output_voltage
-                frequency: backend.frequency
-                efficiency: backend.efficiency
-                loadPercentage: backend.load_percentage
-                batteryCharge: backend.battery_charge
+            TabStrip {
+                id: customTabBarContainer
+                Layout.fillWidth: true
+                theme: appTheme
             }
 
-            SettingsTab {
-                backend: backend
+            StackLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                currentIndex: customTabBarContainer.currentIndex
+
+                MonitorTab {
+                    theme: appTheme
+                    stateColor: appTheme[mainWindow.upsState]
+                    connected: mainWindow.upsState !== "disconnected"
+                    onUtility: mainWindow.upsState === "online"
+                    inputVoltage: backend.input_voltage
+                    outputVoltage: backend.output_voltage
+                    loadPercentage: backend.load_percentage
+                    powerWatts: backend.power_watts
+                    temperature: backend.temperature
+                    frequency: backend.frequency
+                    health: backend.health
+                    loadPct: backend.load_pct
+                }
+
+                DetailsTab {
+                    theme: appTheme
+                    model: backend.manufacturer_model
+                    serialNumber: backend.serial_number
+                    firmware: backend.firmware_version
+                    connection: backend.connection_type
+                    inputVoltage: backend.input_voltage
+                    outputVoltage: backend.output_voltage
+                    frequency: backend.frequency
+                    powerWatts: backend.power_watts
+                    temperature: backend.temperature
+                    loadPercentage: backend.load_percentage
+                    batteryCharge: backend.battery_charge
+                }
+
+                SettingsTab {
+                    backend: backend
+                }
             }
         }
     }

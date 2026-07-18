@@ -41,6 +41,12 @@ QtObject {
     // ---- accent ----
     readonly property color accent: dark ? "#5cc8ff" : "#0369a1"
 
+    // Section headings. The design groups by two tones: identity in teal,
+    // power in amber. Light values are darkened — v2's own sit at 2.2:1 and
+    // 2.0:1 on a light surface, and these are small uppercase text.
+    readonly property color headingDevice: dark ? "#1ABC9C" : "#0d7a66"
+    readonly property color headingPower:  dark ? "#f0a020" : "#a56400"
+
     // ---- state ----
     readonly property color online:       dark ? "#2ecc71" : "#107a4a"
     readonly property color onBattery:    dark ? "#e8930c" : "#c26a00"
