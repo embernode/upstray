@@ -186,7 +186,13 @@ impl ffi::Backend {
         self.as_mut()
             .set_status_text(cxx_qt_lib::QString::from(&status_str));
 
-        let charge = state.battery_charge.map(|c| c as i32);
+        // Filtered before the cast so the string and the numeric property agree
+        // about whether a reading exists: `f64::NAN as i32` is 0, which would
+        // otherwise show a confident "0%" in the tray tooltip.
+        let charge = state
+            .battery_charge
+            .filter(|c| c.is_finite())
+            .map(|c| c as i32);
         let charge_str = match charge {
             Some(c) if state.connection_ok => c.to_string(),
             _ => "?".to_string(),

@@ -16,9 +16,11 @@ Item {
 
     // Drag-to-move. Handing off to the compositor keeps snapping and
     // multi-monitor behaviour working, which manual position maths would not.
+    // No CanTakeOverFromAnything: that licenses this handler to steal the grab
+    // from the window buttons, so a press-and-jiggle on close would drag the
+    // window instead of activating the button.
     DragHandler {
         target: null
-        grabPermissions: PointerHandler.CanTakeOverFromAnything
         onActiveChanged: if (active) root.Window.window.startSystemMove()
     }
 
@@ -72,8 +74,12 @@ Item {
         component WindowButton: Rectangle {
             id: btn
             property string pathData: ""
-            property color hoverBackground: root.theme ? Qt.rgba(1, 1, 1, 0.07)
-                                                       : Qt.rgba(0, 0, 0, 0.07)
+            // Tests the variant, not the existence of the theme: `root.theme`
+            // is always supplied, so testing it left this permanently white
+            // and invisible against a light title bar.
+            property color hoverBackground: root.theme && !root.theme.dark
+                                                       ? Qt.rgba(0, 0, 0, 0.07)
+                                                       : Qt.rgba(1, 1, 1, 0.07)
             property color hoverForeground: root.theme ? root.theme.textPrimary : "#e7eaee"
             signal activated()
 

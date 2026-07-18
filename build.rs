@@ -17,6 +17,7 @@ fn main() {
             .qml_file("qml/components/DetailRow.qml")
             .qml_file("qml/components/GlowOverlay.qml")
             .qml_file("qml/components/TitleBar.qml")
+            .qml_file("qml/components/ResizeEdges.qml")
             .qml_file("qml/components/ToggleSwitch.qml")
             .qml_file("qml/components/ThemedButton.qml")
             .qml_file("qml/components/ThemedField.qml")

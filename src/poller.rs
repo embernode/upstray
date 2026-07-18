@@ -197,6 +197,13 @@ fn select_ups(list: &[(String, String)], configured: &str) -> Option<(String, St
     }
 }
 
+/// Parses a float, rejecting non-finite values. Rust accepts "nan" and "inf",
+/// and a NaN here would both render as "NaN W" and block the fallback to a
+/// good reading, since it is Some.
+fn parse_finite(value: &str) -> Option<f64> {
+    value.parse::<f64>().ok().filter(|v| v.is_finite())
+}
+
 fn parse_ups_state(name: &str, desc: &str, vars: Vec<rups::Variable>) -> Option<UpsState> {
     let mut state = UpsState {
         name: name.to_string(),
@@ -207,7 +214,7 @@ fn parse_ups_state(name: &str, desc: &str, vars: Vec<rups::Variable>) -> Option<
     };
 
     let mut saw_status = false;
-    // Held separately so ups.power wins regardless of the order vars arrive in.
+    // Held separately so ups.realpower wins regardless of the order vars arrive in.
     let mut output_realpower: Option<f64> = None;
     for var in vars {
         let var_name = var.name();
@@ -225,8 +232,11 @@ fn parse_ups_state(name: &str, desc: &str, vars: Vec<rups::Variable>) -> Option<
             "input.voltage" => state.input_voltage = var.value().parse().ok(),
             "output.voltage" => state.output_voltage = var.value().parse().ok(),
             "ups.load" => state.ups_load = var.value().parse().ok(),
-            "ups.power" => state.power_watts = var.value().parse().ok(),
-            "output.realpower" => output_realpower = var.value().parse().ok(),
+            // ups.power is apparent power in VA, not watts, so it is deliberately
+            // not read here: reporting it as watts overstates draw by the power
+            // factor. Only the realpower variables carry watts.
+            "ups.realpower" => state.power_watts = parse_finite(&var.value()),
+            "output.realpower" => output_realpower = parse_finite(&var.value()),
             "ups.temperature" => state.temperature = var.value().parse().ok(),
             "ups.mfr" => state.manufacturer = Some(var.value().to_string()),
             "ups.model" => state.model = Some(var.value().to_string()),
@@ -308,15 +318,73 @@ mod tests {
     }
 
     #[test]
-    fn parse_ups_state_prefers_ups_power_over_output_realpower() {
-        // output.realpower deliberately precedes ups.power to prove order doesn't decide.
+    fn parse_ups_state_prefers_realpower_over_apparent_power() {
+        // ups.power is apparent power in VA, not watts. A UPS reporting both a
+        // real and an apparent figure must be read as watts.
         let vars = vec![
             Variable::parse("ups.status", "OL".to_string()),
-            Variable::parse("output.realpower", "150".to_string()),
-            Variable::parse("ups.power", "202".to_string()),
+            Variable::parse("ups.power", "500".to_string()),
+            Variable::parse("output.realpower", "300".to_string()),
         ];
         let state = parse_ups_state("myups", "desc", vars).expect("state present");
-        assert_eq!(state.power_watts, Some(202.0));
+        assert_eq!(state.power_watts, Some(300.0));
+    }
+
+    #[test]
+    fn parse_ups_state_prefers_ups_realpower_over_output_realpower() {
+        let vars = vec![
+            Variable::parse("ups.status", "OL".to_string()),
+            Variable::parse("output.realpower", "300".to_string()),
+            Variable::parse("ups.realpower", "290".to_string()),
+        ];
+        let state = parse_ups_state("myups", "desc", vars).expect("state present");
+        assert_eq!(state.power_watts, Some(290.0));
+    }
+
+    #[test]
+    fn parse_ups_state_realpower_precedence_is_order_independent() {
+        // output.realpower deliberately precedes ups.realpower to prove that
+        // arrival order does not decide which key wins.
+        let vars = vec![
+            Variable::parse("ups.status", "OL".to_string()),
+            Variable::parse("output.realpower", "300".to_string()),
+            Variable::parse("ups.realpower", "290".to_string()),
+        ];
+        let state = parse_ups_state("myups", "desc", vars).expect("state present");
+        assert_eq!(state.power_watts, Some(290.0));
+    }
+
+    #[test]
+    fn parse_ups_state_non_finite_output_realpower_is_absent_not_nan() {
+        let vars = vec![
+            Variable::parse("ups.status", "OL".to_string()),
+            Variable::parse("output.realpower", "nan".to_string()),
+        ];
+        let state = parse_ups_state("myups", "desc", vars).expect("state present");
+        assert_eq!(state.power_watts, None);
+    }
+
+    #[test]
+    fn parse_ups_state_ignores_non_finite_power() {
+        // f64::from_str accepts "nan" and "inf"; neither may pin the field and
+        // block the fallback to a good reading.
+        let vars = vec![
+            Variable::parse("ups.status", "OL".to_string()),
+            Variable::parse("ups.realpower", "nan".to_string()),
+            Variable::parse("output.realpower", "209".to_string()),
+        ];
+        let state = parse_ups_state("myups", "desc", vars).expect("state present");
+        assert_eq!(state.power_watts, Some(209.0));
+    }
+
+    #[test]
+    fn parse_ups_state_apparent_power_alone_is_not_reported_as_watts() {
+        let vars = vec![
+            Variable::parse("ups.status", "OL".to_string()),
+            Variable::parse("ups.power", "500".to_string()),
+        ];
+        let state = parse_ups_state("myups", "desc", vars).expect("state present");
+        assert_eq!(state.power_watts, None);
     }
 
     #[test]

@@ -98,7 +98,10 @@ ApplicationWindow {
 
         onActivated: function(reason) {
             if (reason === Platform.SystemTrayIcon.Trigger) {
-                if (mainWindow.visible) {
+                // showMinimized() leaves `visible` true, so a minimised window
+                // would otherwise be hidden by the first click and need a
+                // second one to come back.
+                if (mainWindow.visible && mainWindow.visibility !== Window.Minimized) {
                     mainWindow.hide()
                 } else {
                     mainWindow.show()
@@ -140,6 +143,8 @@ ApplicationWindow {
         radius: 16
         color: appTheme.window
         clip: true
+
+        ResizeEdges {}
 
         // Sits under the content, above the shell fill.
         GlowOverlay {
