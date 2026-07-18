@@ -18,6 +18,7 @@ pub struct UpsState {
     pub input_voltage: Option<f64>,
     pub output_voltage: Option<f64>,
     pub ups_load: Option<f64>,
+    pub power_watts: Option<f64>,
 
     // Device Info
     pub manufacturer: Option<String>,
@@ -98,6 +99,7 @@ impl PartialEq for UpsState {
             && self.input_voltage == other.input_voltage
             && self.output_voltage == other.output_voltage
             && self.ups_load == other.ups_load
+            && self.power_watts == other.power_watts
             && self.manufacturer == other.manufacturer
             && self.model == other.model
             && self.serial == other.serial
@@ -124,6 +126,7 @@ impl Default for UpsState {
             input_voltage: None,
             output_voltage: None,
             ups_load: None,
+            power_watts: None,
             manufacturer: None,
             model: None,
             serial: None,

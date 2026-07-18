@@ -207,6 +207,8 @@ fn parse_ups_state(name: &str, desc: &str, vars: Vec<rups::Variable>) -> Option<
     };
 
     let mut saw_status = false;
+    // Held separately so ups.power wins regardless of the order vars arrive in.
+    let mut output_realpower: Option<f64> = None;
     for var in vars {
         let var_name = var.name();
         let value = var.value();
@@ -223,6 +225,8 @@ fn parse_ups_state(name: &str, desc: &str, vars: Vec<rups::Variable>) -> Option<
             "input.voltage" => state.input_voltage = var.value().parse().ok(),
             "output.voltage" => state.output_voltage = var.value().parse().ok(),
             "ups.load" => state.ups_load = var.value().parse().ok(),
+            "ups.power" => state.power_watts = var.value().parse().ok(),
+            "output.realpower" => output_realpower = var.value().parse().ok(),
             "ups.temperature" => state.temperature = var.value().parse().ok(),
             "ups.mfr" => state.manufacturer = Some(var.value().to_string()),
             "ups.model" => state.model = Some(var.value().to_string()),
@@ -241,6 +245,10 @@ fn parse_ups_state(name: &str, desc: &str, vars: Vec<rups::Variable>) -> Option<
             }
             _ => {}
         }
+    }
+
+    if state.power_watts.is_none() {
+        state.power_watts = output_realpower;
     }
 
     if !saw_status {
@@ -297,6 +305,35 @@ mod tests {
         assert!(state.connection_ok);
         assert!(state.status.flags.contains(&StatusFlag::OnBattery));
         assert_eq!(state.battery_charge, Some(80.0));
+    }
+
+    #[test]
+    fn parse_ups_state_prefers_ups_power_over_output_realpower() {
+        // output.realpower deliberately precedes ups.power to prove order doesn't decide.
+        let vars = vec![
+            Variable::parse("ups.status", "OL".to_string()),
+            Variable::parse("output.realpower", "150".to_string()),
+            Variable::parse("ups.power", "202".to_string()),
+        ];
+        let state = parse_ups_state("myups", "desc", vars).expect("state present");
+        assert_eq!(state.power_watts, Some(202.0));
+    }
+
+    #[test]
+    fn parse_ups_state_falls_back_to_output_realpower() {
+        let vars = vec![
+            Variable::parse("ups.status", "OL".to_string()),
+            Variable::parse("output.realpower", "202".to_string()),
+        ];
+        let state = parse_ups_state("myups", "desc", vars).expect("state present");
+        assert_eq!(state.power_watts, Some(202.0));
+    }
+
+    #[test]
+    fn parse_ups_state_without_power_vars_leaves_power_none() {
+        let vars = vec![Variable::parse("ups.status", "OL".to_string())];
+        let state = parse_ups_state("myups", "desc", vars).expect("state present");
+        assert_eq!(state.power_watts, None);
     }
 
     fn ups_list() -> Vec<(String, String)> {

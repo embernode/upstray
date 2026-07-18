@@ -23,6 +23,7 @@ mod ffi {
         #[qproperty(QString, input_voltage)]
         #[qproperty(QString, output_voltage)]
         #[qproperty(QString, load_percentage)]
+        #[qproperty(QString, power_watts)]
         #[qproperty(QString, temperature)]
         #[qproperty(QString, manufacturer_model)]
         #[qproperty(QString, firmware_version)]
@@ -71,6 +72,7 @@ pub struct BackendRust {
     input_voltage: cxx_qt_lib::QString,
     output_voltage: cxx_qt_lib::QString,
     load_percentage: cxx_qt_lib::QString,
+    power_watts: cxx_qt_lib::QString,
     temperature: cxx_qt_lib::QString,
     manufacturer_model: cxx_qt_lib::QString,
     firmware_version: cxx_qt_lib::QString,
@@ -98,6 +100,7 @@ impl Default for BackendRust {
             input_voltage: cxx_qt_lib::QString::from(UNAVAILABLE),
             output_voltage: cxx_qt_lib::QString::from(UNAVAILABLE),
             load_percentage: cxx_qt_lib::QString::from(UNAVAILABLE),
+            power_watts: cxx_qt_lib::QString::from(UNAVAILABLE),
             temperature: cxx_qt_lib::QString::from(UNAVAILABLE),
             manufacturer_model: cxx_qt_lib::QString::from(UNAVAILABLE),
             firmware_version: cxx_qt_lib::QString::from(UNAVAILABLE),
@@ -233,6 +236,13 @@ impl ffi::Backend {
             &state
                 .ups_load
                 .map(|l| format!("{:.0}%", l))
+                .unwrap_or_else(|| UNAVAILABLE.to_string()),
+        ));
+
+        self.as_mut().set_power_watts(cxx_qt_lib::QString::from(
+            &state
+                .power_watts
+                .map(|w| format!("{:.0} W", w))
                 .unwrap_or_else(|| UNAVAILABLE.to_string()),
         ));
 
