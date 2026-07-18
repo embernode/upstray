@@ -32,6 +32,10 @@ mod ffi {
         #[qproperty(QString, efficiency)]
         #[qproperty(QString, health)]
         #[qproperty(QString, serial_number)]
+        // Raw numeric telemetry; -1 / -1.0 means unknown
+        #[qproperty(i32, battery_charge_pct)]
+        #[qproperty(f64, load_pct)]
+        #[qproperty(i32, runtime_minutes)]
         // Settings state
         #[qproperty(QString, nut_host)]
         #[qproperty(QString, nut_port)]
@@ -81,6 +85,10 @@ pub struct BackendRust {
     efficiency: cxx_qt_lib::QString,
     health: cxx_qt_lib::QString,
     serial_number: cxx_qt_lib::QString,
+    // Raw numeric telemetry; -1 / -1.0 means unknown
+    battery_charge_pct: i32,
+    load_pct: f64,
+    runtime_minutes: i32,
     // Settings
     nut_host: cxx_qt_lib::QString,
     nut_port: cxx_qt_lib::QString,
@@ -109,6 +117,9 @@ impl Default for BackendRust {
             efficiency: cxx_qt_lib::QString::from(UNAVAILABLE),
             health: cxx_qt_lib::QString::from("good"),
             serial_number: cxx_qt_lib::QString::from(UNAVAILABLE),
+            battery_charge_pct: -1,
+            load_pct: -1.0,
+            runtime_minutes: -1,
             nut_host: cxx_qt_lib::QString::from("localhost"),
             nut_port: cxx_qt_lib::QString::from("3493"),
             ups_name: cxx_qt_lib::QString::from(""),
@@ -182,6 +193,11 @@ impl ffi::Backend {
         };
         self.as_mut()
             .set_battery_charge(cxx_qt_lib::QString::from(&charge_str));
+        self.as_mut()
+            .set_battery_charge_pct(match state.battery_charge {
+                Some(c) if state.connection_ok && c.is_finite() => (c as i32).clamp(0, 100),
+                _ => -1,
+            });
 
         let icon = if !state.connection_ok || state.name.is_empty() {
             "battery-missing"
@@ -217,6 +233,11 @@ impl ffi::Backend {
         };
         self.as_mut()
             .set_runtime_text(cxx_qt_lib::QString::from(&runtime_str));
+        self.as_mut().set_runtime_minutes(
+            state
+                .battery_runtime_secs
+                .map_or(-1, |secs| (secs / 60).min(i32::MAX as u64) as i32),
+        );
 
         self.as_mut().set_input_voltage(cxx_qt_lib::QString::from(
             &state
@@ -238,6 +259,12 @@ impl ffi::Backend {
                 .map(|l| format!("{:.0}%", l))
                 .unwrap_or_else(|| UNAVAILABLE.to_string()),
         ));
+        self.as_mut().set_load_pct(
+            state
+                .ups_load
+                .filter(|l| l.is_finite())
+                .map_or(-1.0, |l| l.clamp(0.0, 100.0)),
+        );
 
         self.as_mut().set_power_watts(cxx_qt_lib::QString::from(
             &state
