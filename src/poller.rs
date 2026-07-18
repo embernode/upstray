@@ -26,14 +26,17 @@ pub async fn run_polling_loop(
     // routing every state change (success or failure) through the same bookkeeping.
     let emit = |old_state: &mut Option<UpsState>, new: UpsState| {
         let notifications = notifier::transition_notifications(old_state.as_ref(), &new);
-        if !notifications.is_empty() {
-            tokio::spawn(notifier::send_notifications(notifications));
-        }
-        // Retire alarms whose condition has resolved, so a standing critical
-        // notification does not outlive the problem it reported.
+        // Retire alarms that no longer describe the present, so a standing
+        // critical notification cannot outlive the problem it reported.
         let dismissals = notifier::transition_dismissals(old_state.as_ref(), &new);
-        if !dismissals.is_empty() {
-            tokio::spawn(notifier::close_notifications(dismissals));
+        if !notifications.is_empty() || !dismissals.is_empty() {
+            // One task, dismissals first: spawning two lets them race, and a
+            // kind that is both retired and re-raised in the same tick must end
+            // up raised.
+            tokio::spawn(async move {
+                notifier::close_notifications(dismissals).await;
+                notifier::send_notifications(notifications).await;
+            });
         }
         let _ = state_tx.send(new.clone());
         *old_state = Some(new);

@@ -124,23 +124,24 @@ pub async fn send_notification(
 /// Closes standing alarms whose condition has resolved. Unknown kinds are a
 /// no-op, so dismissing something that was never shown is harmless.
 pub async fn close_notifications(kinds: Vec<NotificationKind>) {
-    if kinds.is_empty() {
+    // Resolve ids first. Dismissals are evaluated on every poll now, so with
+    // nothing standing this must cost a map lookup and no D-Bus round trip.
+    let ids: Vec<u32> = match active().lock() {
+        Ok(mut m) => kinds.iter().filter_map(|k| m.remove(k)).collect(),
+        Err(_) => return,
+    };
+    if ids.is_empty() {
         return;
     }
+
     let Ok(connection) = get_dbus_connection().await else {
         return;
     };
     let Ok(proxy) = NotificationsProxy::new(connection).await else {
         return;
     };
-    for kind in kinds {
-        let id = match active().lock() {
-            Ok(mut m) => m.remove(&kind),
-            Err(_) => None,
-        };
-        if let Some(id) = id {
-            let _ = proxy.close_notification(id).await;
-        }
+    for id in ids {
+        let _ = proxy.close_notification(id).await;
     }
 }
 
@@ -276,39 +277,49 @@ pub fn transition_notifications(prev: Option<&UpsState>, new: &UpsState) -> Vec<
     out
 }
 
-/// Standing alarms whose condition has resolved and which should therefore be
+/// Standing alarms that no longer describe the present, and should therefore be
 /// taken off screen. The counterpart to `transition_notifications`: alarms are
-/// raised at critical urgency and stay up, so something has to retire them, and
-/// leaving that to the user is what made them feel like litter.
+/// raised at critical urgency and stay up, so something has to retire them.
+///
+/// Deliberately decided from `new` alone rather than from a prev/new edge. An
+/// edge is only observed if we are watching at the instant it happens, and we
+/// are not: the connection can drop across the end of an outage, and the poller
+/// resets its previous state to `None` whenever the config changes. Both left
+/// alarms standing forever. Judging the current state instead is idempotent —
+/// closing something that is not on screen is a no-op — so a missed edge simply
+/// gets cleaned up on the next poll.
 pub fn transition_dismissals(prev: Option<&UpsState>, new: &UpsState) -> Vec<NotificationKind> {
     let mut out = Vec::new();
-    let Some(prev) = prev else {
-        return out;
-    };
 
-    if !prev.connection_ok && new.connection_ok {
-        out.push(NotificationKind::ConnectionLost);
-    }
-
-    // Flags are meaningless without a live connection; a dropout must not be
-    // read as the alarm having cleared.
-    if !new.connection_ok || !prev.connection_ok {
+    // Flags read empty on a dropout. Treating that as "the alarm cleared" would
+    // retire a live warning at the worst possible moment.
+    if !new.connection_ok {
         return out;
     }
 
-    let cleared = |f: StatusFlag| prev.status.flags.contains(&f) && !new.status.flags.contains(&f);
+    // We are talking to the UPS, so any connection alarm is stale by definition,
+    // whatever we thought the previous state was.
+    out.push(NotificationKind::ConnectionLost);
 
-    if cleared(StatusFlag::OnBattery) {
+    let has = |f: StatusFlag| new.status.flags.contains(&f);
+    let newly =
+        |f: StatusFlag| has(f) && !prev.is_some_and(|p| p.status.flags.contains(&f));
+
+    if !has(StatusFlag::OnBattery) {
         out.push(NotificationKind::OnBattery);
         // Mains is back, so a low-battery warning raised during the outage no
-        // longer describes anything, whether or not the flag itself has cleared
-        // yet — the charge often lags behind the transfer.
-        out.push(NotificationKind::LowBattery);
-    } else if cleared(StatusFlag::LowBattery) {
+        // longer applies — charge lags the transfer, so its flag often has not
+        // dropped yet. Unless it has only just appeared, in which case it does
+        // describe the present and must not be retired in the same tick that
+        // raises it.
+        if !newly(StatusFlag::LowBattery) {
+            out.push(NotificationKind::LowBattery);
+        }
+    } else if !has(StatusFlag::LowBattery) {
         out.push(NotificationKind::LowBattery);
     }
 
-    if cleared(StatusFlag::ForcedShutdown) {
+    if !has(StatusFlag::ForcedShutdown) {
         out.push(NotificationKind::ForcedShutdown);
     }
 
@@ -423,7 +434,7 @@ mod tests {
     #[test]
     fn reconnecting_dismisses_the_connection_lost_alarm() {
         let ns = transition_dismissals(Some(&disconnected()), &connected(vec![StatusFlag::Online]));
-        assert_eq!(ns, vec![NotificationKind::ConnectionLost]);
+        assert!(ns.contains(&NotificationKind::ConnectionLost));
     }
 
     #[test]
@@ -433,18 +444,97 @@ mod tests {
         let prev = connected(vec![StatusFlag::OnBattery, StatusFlag::LowBattery]);
         let new = connected(vec![StatusFlag::Online, StatusFlag::LowBattery]);
         let ns = transition_dismissals(Some(&prev), &new);
-        assert_eq!(
-            ns,
-            vec![NotificationKind::OnBattery, NotificationKind::LowBattery]
+        assert!(ns.contains(&NotificationKind::OnBattery));
+        assert!(ns.contains(&NotificationKind::LowBattery));
+    }
+
+    #[test]
+    fn recovering_charge_while_still_on_battery_keeps_the_outage_alarm() {
+        let prev = connected(vec![StatusFlag::OnBattery, StatusFlag::LowBattery]);
+        let new = connected(vec![StatusFlag::OnBattery]);
+        let ns = transition_dismissals(Some(&prev), &new);
+        assert!(ns.contains(&NotificationKind::LowBattery));
+        // Still on battery, so that alarm must stay up.
+        assert!(!ns.contains(&NotificationKind::OnBattery));
+    }
+
+    #[test]
+    fn outage_ending_during_a_dropout_still_retires_the_alarm() {
+        // The edge that raised On Battery is never followed by an edge that
+        // clears it: the connection drops mid-outage and mains is already back
+        // by the time we see the UPS again. Judging `new` alone catches it.
+        let ns = transition_dismissals(Some(&disconnected()), &connected(vec![StatusFlag::Online]));
+        assert!(ns.contains(&NotificationKind::OnBattery));
+        assert!(ns.contains(&NotificationKind::ConnectionLost));
+    }
+
+    #[test]
+    fn a_reset_previous_state_still_retires_alarms() {
+        // The poller drops its previous state to None whenever the config
+        // changes — which is exactly what happens after the user fixes the host
+        // in Settings, with a Connection Lost alarm standing.
+        let ns = transition_dismissals(None, &connected(vec![StatusFlag::Online]));
+        assert!(ns.contains(&NotificationKind::ConnectionLost));
+    }
+
+    #[test]
+    fn low_battery_appearing_as_mains_returns_is_not_retired_at_once() {
+        // Mains back but charge still under the low threshold is an ordinary
+        // NUT state. The alarm is raised this tick, so it must not also be
+        // dismissed this tick.
+        let prev = connected(vec![StatusFlag::OnBattery]);
+        let new = connected(vec![StatusFlag::Online, StatusFlag::LowBattery]);
+        let raised = transition_notifications(Some(&prev), &new);
+        let dropped = transition_dismissals(Some(&prev), &new);
+        assert!(kinds(&raised).contains(&NotificationKind::LowBattery));
+        assert!(
+            !dropped.contains(&NotificationKind::LowBattery),
+            "raised and retired in the same tick"
         );
     }
 
     #[test]
-    fn recovering_charge_while_still_on_battery_dismisses_only_low_battery() {
+    fn stale_low_battery_is_retired_when_mains_returns() {
+        // Same shape, but the flag was already set during the outage, so it is
+        // left over rather than new.
         let prev = connected(vec![StatusFlag::OnBattery, StatusFlag::LowBattery]);
+        let new = connected(vec![StatusFlag::Online, StatusFlag::LowBattery]);
+        let ns = transition_dismissals(Some(&prev), &new);
+        assert!(ns.contains(&NotificationKind::LowBattery));
+    }
+
+    #[test]
+    fn cancelled_shutdown_is_retired() {
+        let prev = connected(vec![StatusFlag::OnBattery, StatusFlag::ForcedShutdown]);
         let new = connected(vec![StatusFlag::OnBattery]);
         let ns = transition_dismissals(Some(&prev), &new);
-        assert_eq!(ns, vec![NotificationKind::LowBattery]);
+        assert!(ns.contains(&NotificationKind::ForcedShutdown));
+    }
+
+    #[test]
+    fn a_live_outage_is_never_retired() {
+        // The one thing that must never happen: closing an alarm whose
+        // condition still holds.
+        let prev = connected(vec![StatusFlag::OnBattery, StatusFlag::LowBattery]);
+        let new = connected(vec![StatusFlag::OnBattery, StatusFlag::LowBattery]);
+        let ns = transition_dismissals(Some(&prev), &new);
+        assert!(!ns.contains(&NotificationKind::OnBattery));
+        assert!(!ns.contains(&NotificationKind::LowBattery));
+    }
+
+    #[test]
+    fn flapping_retires_and_re_raises_without_losing_track() {
+        let online = connected(vec![StatusFlag::Online]);
+        let battery = connected(vec![StatusFlag::OnBattery]);
+        // out -> back -> out again
+        assert!(kinds(&transition_notifications(Some(&online), &battery))
+            .contains(&NotificationKind::OnBattery));
+        assert!(transition_dismissals(Some(&battery), &online)
+            .contains(&NotificationKind::OnBattery));
+        assert!(kinds(&transition_notifications(Some(&online), &battery))
+            .contains(&NotificationKind::OnBattery));
+        assert!(!transition_dismissals(Some(&online), &battery)
+            .contains(&NotificationKind::OnBattery));
     }
 
     #[test]
@@ -454,11 +544,6 @@ mod tests {
         let prev = connected(vec![StatusFlag::OnBattery, StatusFlag::LowBattery]);
         let ns = transition_dismissals(Some(&prev), &disconnected());
         assert!(ns.is_empty());
-    }
-
-    #[test]
-    fn first_ever_poll_dismisses_nothing() {
-        assert!(transition_dismissals(None, &connected(vec![StatusFlag::Online])).is_empty());
     }
 
     #[test]
