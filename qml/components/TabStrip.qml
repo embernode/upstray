@@ -8,7 +8,7 @@ import QtQuick
 Item {
     id: root
 
-    property var theme
+    required property var theme
     property int currentIndex: 0
 
     implicitHeight: 45
@@ -50,8 +50,8 @@ Item {
 
                 readonly property bool active: root.currentIndex === tab.index
                 readonly property color tint: tab.active
-                    ? (root.theme ? root.theme.textPrimary : "#e7eaee")
-                    : (root.theme ? root.theme.textMuted : "#7f8896")
+                    ? root.theme.textPrimary
+                    : root.theme.textMuted
 
                 Row {
                     anchors.centerIn: parent
@@ -69,7 +69,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         text: tab.modelData.label
                         color: tab.tint
-                        font.family: root.theme ? root.theme.fontSans : "sans-serif"
+                        font.family: root.theme.fontSans
                         // The design specifies 12.5px; pixelSize is an int, so
                         // this rounds up rather than silently failing to apply.
                         font.pixelSize: 13
@@ -86,7 +86,7 @@ Item {
                     anchors.rightMargin: 12
                     height: 2
                     radius: 2
-                    color: tab.active ? (root.theme ? root.theme.accent : "#5cc8ff") : "transparent"
+                    color: tab.active ? root.theme.accent : "transparent"
                 }
 
                 MouseArea {
@@ -103,6 +103,6 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 1
-        color: root.theme ? root.theme.divider : "transparent"
+        color: root.theme.divider
     }
 }

@@ -6,7 +6,7 @@ import QtQuick.Layouts
 Item {
     id: root
 
-    property var theme
+    required property var theme
 
     property string model: ""
     property string serialNumber: ""
@@ -97,7 +97,7 @@ Item {
                         Layout.fillWidth: true
                         theme: root.theme
                         label: qsTr("Firmware")
-                        value: root.firmware
+                        value: root.firmware === "—" ? root.firmware : "v" + root.firmware
                     }
                     DetailRow {
                         Layout.fillWidth: true
@@ -114,7 +114,7 @@ Item {
                 Layout.topMargin: 20
                 Layout.bottomMargin: 10
                 theme: root.theme
-                color: root.theme ? root.theme.headingPower : "#f0a020"
+                color: root.theme.headingPower
                 text: qsTr("Power metrics")
             }
 

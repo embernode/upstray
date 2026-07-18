@@ -1,31 +1,44 @@
 import QtQuick
+import QtQuick.Controls
 
 // Tinted action button. Sits on an accent wash rather than a solid fill, so it
 // reads as secondary to the data it acts on.
-Rectangle {
+//
+// Built on Button rather than a bare Rectangle so it keeps tab focus,
+// space/return activation and accessibility metadata.
+Button {
     id: root
 
-    property var theme
-    property string label: ""
+    required property var theme
     property string iconPath: ""
 
-    signal clicked()
+    readonly property color _accent: theme.accent
 
-    readonly property color _accent: theme ? theme.accent : "#5cc8ff"
+    focusPolicy: Qt.StrongFocus
+    activeFocusOnTab: true
 
-    implicitWidth: content.implicitWidth + 32
+    leftPadding: 16
+    rightPadding: 16
+    topPadding: 0
+    bottomPadding: 0
     implicitHeight: 36
-    radius: theme ? theme.radiusInput : 9
 
-    color: Qt.rgba(_accent.r, _accent.g, _accent.b, hover.hovered ? 0.20 : 0.12)
-    border.width: 1
-    border.color: Qt.rgba(_accent.r, _accent.g, _accent.b, 0.35)
+    Accessible.role: Accessible.Button
+    Accessible.name: root.text
 
-    Behavior on color { ColorAnimation { duration: 120 } }
+    background: Rectangle {
+        radius: root.theme.radiusInput
+        color: Qt.rgba(root._accent.r, root._accent.g, root._accent.b,
+                       root.down ? 0.26 : root.hovered ? 0.20 : 0.12)
+        border.width: 1
+        border.color: Qt.rgba(root._accent.r, root._accent.g, root._accent.b,
+                              root.visualFocus ? 0.90 : 0.35)
 
-    Row {
-        id: content
-        anchors.centerIn: parent
+        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on border.color { ColorAnimation { duration: 120 } }
+    }
+
+    contentItem: Row {
         spacing: 7
 
         TabIcon {
@@ -40,20 +53,15 @@ Rectangle {
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: root.label
+            text: root.text
             color: root._accent
-            font.family: root.theme ? root.theme.fontSans : "sans-serif"
+            font.family: root.theme.fontSans
             font.pixelSize: 13
             font.weight: Font.Bold
         }
     }
 
     HoverHandler {
-        id: hover
         cursorShape: Qt.PointingHandCursor
-    }
-
-    TapHandler {
-        onTapped: root.clicked()
     }
 }

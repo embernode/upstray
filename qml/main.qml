@@ -210,7 +210,7 @@ ApplicationWindow {
                     theme: appTheme
                     stateColor: appTheme[mainWindow.upsState]
                     connected: mainWindow.upsState !== "disconnected"
-                    onUtility: mainWindow.upsState === "online"
+                    mainsPresent: mainWindow.upsState === "online"
                     inputVoltage: backend.input_voltage
                     outputVoltage: backend.output_voltage
                     loadPercentage: backend.load_percentage

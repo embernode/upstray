@@ -7,7 +7,7 @@ Item {
     id: root
 
     property string pathData: ""
-    property color iconColor: "#7f8896"
+    required property color iconColor
     property bool filled: false
     property real strokeWidth: 2
 

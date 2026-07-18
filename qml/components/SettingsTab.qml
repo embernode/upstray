@@ -7,7 +7,7 @@ import QtQuick.Layouts
 Item {
     id: root
 
-    property var theme
+    required property var theme
     property QtObject backend: null
 
     readonly property string saveIcon: "M5 3h11l3 3v15H5z M8 3v5h6V3 M8 21v-6h8v6"
@@ -76,15 +76,15 @@ Item {
 
                             Text {
                                 text: qsTr("Auto-start with system")
-                                color: root.theme ? root.theme.textPrimary : "#e7eaee"
-                                font.family: root.theme ? root.theme.fontSans : "sans-serif"
+                                color: root.theme.textPrimary
+                                font.family: root.theme.fontSans
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
                             }
                             Text {
                                 text: qsTr("Launch monitor on login")
-                                color: root.theme ? root.theme.textMuted : "#7f8896"
-                                font.family: root.theme ? root.theme.fontSans : "sans-serif"
+                                color: root.theme.textMuted
+                                font.family: root.theme.fontSans
                                 font.pixelSize: 12
                             }
                         }
@@ -105,7 +105,7 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 1
-                        color: root.theme ? root.theme.divider : "transparent"
+                        color: root.theme.divider
                     }
 
                     RowLayout {
@@ -118,15 +118,15 @@ Item {
 
                             Text {
                                 text: qsTr("Notifications")
-                                color: root.theme ? root.theme.textPrimary : "#e7eaee"
-                                font.family: root.theme ? root.theme.fontSans : "sans-serif"
+                                color: root.theme.textPrimary
+                                font.family: root.theme.fontSans
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
                             }
                             Text {
                                 text: qsTr("Alert on power events")
-                                color: root.theme ? root.theme.textMuted : "#7f8896"
-                                font.family: root.theme ? root.theme.fontSans : "sans-serif"
+                                color: root.theme.textMuted
+                                font.family: root.theme.fontSans
                                 font.pixelSize: 12
                             }
                         }
@@ -188,7 +188,7 @@ Item {
                 Layout.topMargin: 12
                 Layout.rightMargin: 18 + scroller.gutter
                 theme: root.theme
-                label: qsTr("Save Network Settings")
+                text: qsTr("Save Network Settings")
                 iconPath: root.saveIcon
                 onClicked: {
                     if (!root.backend)
@@ -206,8 +206,8 @@ Item {
                 Layout.rightMargin: 18 + scroller.gutter
                 Layout.topMargin: 8
                 text: qsTr("The connection reconnects automatically after saving.")
-                color: root.theme ? root.theme.textMuted : "#7f8896"
-                font.family: root.theme ? root.theme.fontSans : "sans-serif"
+                color: root.theme.textMuted
+                font.family: root.theme.fontSans
                 font.pixelSize: 11
                 wrapMode: Text.WordWrap
             }
@@ -225,8 +225,8 @@ Item {
                 Layout.leftMargin: 18
                 Layout.bottomMargin: 6
                 text: qsTr("Device to monitor")
-                color: root.theme ? root.theme.textMuted : "#8a919b"
-                font.family: root.theme ? root.theme.fontSans : "sans-serif"
+                color: root.theme.textMuted
+                font.family: root.theme.fontSans
                 font.pixelSize: 12
                 font.weight: Font.Medium
             }
@@ -278,7 +278,7 @@ Item {
                 Layout.rightMargin: 18 + scroller.gutter
                 Layout.bottomMargin: 22
                 theme: root.theme
-                label: qsTr("Save Device")
+                text: qsTr("Save Device")
                 iconPath: root.saveIcon
                 onClicked: {
                     if (!root.backend)

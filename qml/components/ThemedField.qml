@@ -5,7 +5,7 @@ import QtQuick.Controls
 Item {
     id: root
 
-    property var theme
+    required property var theme
     property string label: ""
     property alias text: field.text
     property alias placeholder: field.placeholderText
@@ -19,8 +19,8 @@ Item {
         anchors.top: parent.top
         anchors.left: parent.left
         text: root.label
-        color: root.theme ? root.theme.textMuted : "#8a919b"
-        font.family: root.theme ? root.theme.fontSans : "sans-serif"
+        color: root.theme.textMuted
+        font.family: root.theme.fontSans
         font.pixelSize: 12
         font.weight: Font.Medium
     }
@@ -32,9 +32,9 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
 
-        color: root.theme ? root.theme.textPrimary : "#e7eaee"
-        placeholderTextColor: root.theme ? root.theme.textMuted : "#7f8896"
-        font.family: root.theme ? root.theme.fontSans : "sans-serif"
+        color: root.theme.textPrimary
+        placeholderTextColor: root.theme.textMuted
+        font.family: root.theme.fontSans
         font.pixelSize: 13
         font.weight: Font.Medium
 
@@ -44,12 +44,12 @@ Item {
         bottomPadding: 11
 
         background: Rectangle {
-            radius: root.theme ? root.theme.radiusInput : 9
-            color: root.theme ? root.theme.sunken : "#0c0e12"
+            radius: root.theme.radiusInput
+            color: root.theme.sunken
             border.width: 1
             border.color: field.activeFocus
-                ? (root.theme ? root.theme.accent : "#5cc8ff")
-                : (root.theme ? root.theme.inputBorder : "#2a3038")
+                ? root.theme.accent
+                : root.theme.inputBorder
 
             Behavior on border.color { ColorAnimation { duration: 120 } }
         }

@@ -6,7 +6,7 @@ import QtQuick.Shapes
 Item {
     id: root
 
-    property var theme
+    required property var theme
     property string deviceName: ""
 
     signal minimiseRequested()
@@ -43,8 +43,8 @@ Item {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: "UpsTray"
-            color: root.theme ? root.theme.textTitle : "#c4c9d0"
-            font.family: root.theme ? root.theme.fontSans : "sans-serif"
+            color: root.theme.textTitle
+            font.family: root.theme.fontSans
             font.pixelSize: 13
             // The design says 700, but Qt renders Manrope's bold weight heavier
             // than the browser does, so matching the number overshoots the look.
@@ -56,8 +56,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             visible: root.deviceName.length > 0
             text: "· " + root.deviceName
-            color: root.theme ? root.theme.textMuted : "#5a616b"
-            font.family: root.theme ? root.theme.fontMono : "monospace"
+            color: root.theme.textMuted
+            font.family: root.theme.fontMono
             font.pixelSize: 12
             font.weight: Font.Medium
             elide: Text.ElideRight
@@ -74,13 +74,11 @@ Item {
         component WindowButton: Rectangle {
             id: btn
             property string pathData: ""
-            // Tests the variant, not the existence of the theme: `root.theme`
-            // is always supplied, so testing it left this permanently white
-            // and invisible against a light title bar.
-            property color hoverBackground: root.theme && !root.theme.dark
-                                                       ? Qt.rgba(0, 0, 0, 0.07)
-                                                       : Qt.rgba(1, 1, 1, 0.07)
-            property color hoverForeground: root.theme ? root.theme.textPrimary : "#e7eaee"
+            // Tests the variant: a white wash is invisible against a light
+            // title bar, so the light theme needs a dark one instead.
+            property color hoverBackground: !root.theme.dark ? Qt.rgba(0, 0, 0, 0.07)
+                                                             : Qt.rgba(1, 1, 1, 0.07)
+            property color hoverForeground: root.theme.textPrimary
             signal activated()
 
             width: 26; height: 26
@@ -93,7 +91,7 @@ Item {
                 preferredRendererType: Shape.CurveRenderer
                 ShapePath {
                     strokeColor: hover.hovered ? btn.hoverForeground
-                                               : (root.theme ? root.theme.textMuted : "#7f8896")
+                                               : root.theme.textMuted
                     strokeWidth: 1.5
                     fillColor: "transparent"
                     capStyle: ShapePath.RoundCap
@@ -112,7 +110,7 @@ Item {
 
         WindowButton {
             pathData: "M3 3 L9 9 M9 3 L3 9"
-            hoverBackground: root.theme ? root.theme.lowBattery : "#e5484d"
+            hoverBackground: root.theme.lowBattery
             hoverForeground: "#ffffff"
             onActivated: root.closeRequested()
         }
@@ -123,6 +121,6 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 1
-        color: root.theme ? root.theme.divider : "transparent"
+        color: root.theme.divider
     }
 }

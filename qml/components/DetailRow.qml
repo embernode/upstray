@@ -5,7 +5,7 @@ import QtQuick
 Item {
     id: root
 
-    property var theme
+    required property var theme
     property string label: ""
     property string value: "—"
     property bool last: false
@@ -16,8 +16,8 @@ Item {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         text: root.label
-        color: root.theme ? root.theme.textMuted : "#8a919b"
-        font.family: root.theme ? root.theme.fontSans : "sans-serif"
+        color: root.theme.textMuted
+        font.family: root.theme.fontSans
         font.pixelSize: 13
     }
 
@@ -25,8 +25,8 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         text: root.value
-        color: root.theme ? root.theme.textPrimary : "#e7eaee"
-        font.family: root.theme ? root.theme.fontMono : "monospace"
+        color: root.theme.textPrimary
+        font.family: root.theme.fontMono
         font.pixelSize: 13
         font.weight: Font.Bold
         elide: Text.ElideRight
@@ -41,6 +41,6 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 1
-        color: root.theme ? root.theme.divider : "transparent"
+        color: root.theme.divider
     }
 }

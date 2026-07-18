@@ -6,7 +6,7 @@ import QtQuick.Shapes
 Item {
     id: root
 
-    property var theme
+    required property var theme
     property real value: -1
     property color ringColor: "#2ecc71"
     property string caption: "charge"
@@ -15,7 +15,7 @@ Item {
     implicitHeight: 104
 
     readonly property bool known: value >= 0
-    readonly property real _radius: Math.min(width, height) / 2 - strokeWidth / 2
+    readonly property real _radius: Math.max(0, Math.min(width, height) / 2 - strokeWidth / 2)
     readonly property real strokeWidth: 8
 
     Shape {
@@ -23,7 +23,7 @@ Item {
         preferredRendererType: Shape.CurveRenderer
 
         ShapePath {
-            strokeColor: root.theme ? root.theme.track : "#22ffffff"
+            strokeColor: root.theme.track
             strokeWidth: root.strokeWidth
             fillColor: "transparent"
             PathAngleArc {
@@ -64,7 +64,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             text: root.known ? Math.round(root.value) + "%" : "—"
             color: root.ringColor
-            font.family: root.theme ? root.theme.fontSans : "sans-serif"
+            font.family: root.theme.fontSans
             font.pixelSize: 26
             font.weight: Font.ExtraBold
         }
@@ -72,8 +72,8 @@ Item {
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: root.caption
-            color: root.theme ? root.theme.textMuted : "#7f8896"
-            font.family: root.theme ? root.theme.fontMono : "monospace"
+            color: root.theme.textMuted
+            font.family: root.theme.fontMono
             font.pixelSize: 9
             font.weight: Font.DemiBold
             font.letterSpacing: 0.8

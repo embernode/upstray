@@ -7,22 +7,22 @@ import QtQuick.Shapes
 ComboBox {
     id: root
 
-    property var theme
+    required property var theme
 
-    readonly property color _text: theme ? theme.textPrimary : "#e7eaee"
-    readonly property color _surface: theme ? theme.surface : "#171b21"
+    readonly property color _text: theme.textPrimary
+    readonly property color _surface: theme.surface
 
     implicitHeight: 42
     leftPadding: 12
     rightPadding: 34
 
     background: Rectangle {
-        radius: root.theme ? root.theme.radiusInput : 9
-        color: root.theme ? root.theme.sunken : "#0c0e12"
+        radius: root.theme.radiusInput
+        color: root.theme.sunken
         border.width: 1
         border.color: root.activeFocus || root.popup.visible
-            ? (root.theme ? root.theme.accent : "#5cc8ff")
-            : (root.theme ? root.theme.inputBorder : "#2a3038")
+            ? root.theme.accent
+            : root.theme.inputBorder
 
         Behavior on border.color { ColorAnimation { duration: 120 } }
     }
@@ -30,7 +30,7 @@ ComboBox {
     contentItem: Text {
         text: root.displayText
         color: root._text
-        font.family: root.theme ? root.theme.fontSans : "sans-serif"
+        font.family: root.theme.fontSans
         font.pixelSize: 13
         font.weight: Font.Medium
         verticalAlignment: Text.AlignVCenter
@@ -45,7 +45,7 @@ ComboBox {
         preferredRendererType: Shape.CurveRenderer
 
         ShapePath {
-            strokeColor: root.theme ? root.theme.textMuted : "#7f8896"
+            strokeColor: root.theme.textMuted
             strokeWidth: 2
             fillColor: "transparent"
             capStyle: ShapePath.RoundCap
@@ -67,7 +67,7 @@ ComboBox {
         contentItem: Text {
             text: modelData
             color: root._text
-            font.family: root.theme ? root.theme.fontSans : "sans-serif"
+            font.family: root.theme.fontSans
             font.pixelSize: 13
             font.weight: root.currentIndex === index ? Font.Bold : Font.Medium
             verticalAlignment: Text.AlignVCenter
@@ -76,8 +76,8 @@ ComboBox {
 
         background: Rectangle {
             color: highlighted
-                ? (root.theme ? Qt.rgba(root.theme.accent.r, root.theme.accent.g,
-                                        root.theme.accent.b, 0.14) : "#204050")
+                ? Qt.rgba(root.theme.accent.r, root.theme.accent.g,
+                          root.theme.accent.b, 0.14)
                 : "transparent"
         }
     }
@@ -89,10 +89,10 @@ ComboBox {
         padding: 4
 
         background: Rectangle {
-            radius: root.theme ? root.theme.radiusInput : 9
+            radius: root.theme.radiusInput
             color: root._surface
             border.width: 1
-            border.color: root.theme ? root.theme.inputBorder : "#2a3038"
+            border.color: root.theme.inputBorder
         }
 
         contentItem: ListView {

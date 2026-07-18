@@ -4,15 +4,15 @@ import QtQuick
 Rectangle {
     id: root
 
-    property var theme
+    required property var theme
     property string caption: ""
     property string value: "—"
-    property color valueColor: theme ? theme.textPrimary : "#e7eaee"
+    property color valueColor: theme.textPrimary
 
-    radius: theme ? theme.radiusCard : 12
-    color: theme ? theme.surface : "transparent"
+    radius: theme.radiusCard
+    color: theme.surface
     border.width: 1
-    border.color: theme ? theme.border : "transparent"
+    border.color: theme.border
     implicitHeight: content.implicitHeight + 28
 
     Column {
@@ -26,8 +26,8 @@ Rectangle {
 
         Text {
             text: root.caption
-            color: root.theme ? root.theme.textMuted : "#7f8896"
-            font.family: root.theme ? root.theme.fontMono : "monospace"
+            color: root.theme.textMuted
+            font.family: root.theme.fontMono
             font.pixelSize: 10
             font.weight: Font.DemiBold
             font.letterSpacing: 0.5
@@ -39,7 +39,7 @@ Rectangle {
         Text {
             text: root.value
             color: root.valueColor
-            font.family: root.theme ? root.theme.fontMono : "monospace"
+            font.family: root.theme.fontMono
             font.pixelSize: 17
             font.weight: Font.Bold
             elide: Text.ElideRight
