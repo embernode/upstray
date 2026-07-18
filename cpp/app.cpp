@@ -10,6 +10,11 @@ void run_qapplication() {
 
     // Initialize the Qt application as QApplication (needed for widgets like QSystemTrayIcon in QML)
     QApplication app(argc, argv);
+
+    // Ties the window to resources/upstray.desktop so the shell can resolve our
+    // icon and name. Without it the taskbar entry has no icon association.
+    QGuiApplication::setDesktopFileName("upstray");
+
     QQmlApplicationEngine engine;
 
     const QUrl url("qrc:/qt/qml/com/upstray/app/qml/main.qml");
