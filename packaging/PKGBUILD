@@ -1,5 +1,5 @@
 pkgname=upstray
-pkgver=0.3.0
+pkgver=0.4.0
 pkgrel=1
 pkgdesc="Modern KDE system tray monitor for Network UPS Tools (NUT)"
 arch=('x86_64')
