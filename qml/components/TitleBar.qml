@@ -44,7 +44,9 @@ Item {
             color: root.theme ? root.theme.textTitle : "#c4c9d0"
             font.family: root.theme ? root.theme.fontSans : "sans-serif"
             font.pixelSize: 13
-            font.weight: Font.Bold
+            // The design says 700, but Qt renders Manrope's bold weight heavier
+            // than the browser does, so matching the number overshoots the look.
+            font.weight: Font.Medium
             font.letterSpacing: 0.3
         }
 

@@ -21,13 +21,29 @@ Item {
     property string loadPercentage: ""
     property string batteryCharge: ""
 
-    ScrollView {
+    // Flickable rather than ScrollView: ScrollView creates its own scroll bars,
+    // and assigning one to it puts the assigned bar at the origin — it rendered
+    // down the left of the content instead of the right edge.
+    Flickable {
+        id: scroller
         anchors.fill: parent
-        contentWidth: availableWidth
+        contentWidth: width
+        contentHeight: content.implicitHeight
         clip: true
+        boundsBehavior: Flickable.StopAtBounds
+
+        ScrollBar.vertical: ScrollBar {
+            id: scrollBar
+            policy: ScrollBar.AsNeeded
+        }
+
+        // The bar overlays the content rather than displacing it, so without
+        // this it eats the right-hand padding rather than sitting beside it.
+        readonly property real gutter: scrollBar.visible ? scrollBar.width : 0
 
         ColumnLayout {
-            width: root.width
+            id: content
+            width: scroller.width
             spacing: 0
 
             SectionHeading {
@@ -41,7 +57,7 @@ Item {
             Card {
                 Layout.fillWidth: true
                 Layout.leftMargin: 18
-                Layout.rightMargin: 18
+                Layout.rightMargin: 18 + scroller.gutter
                 Layout.preferredHeight: deviceRows.implicitHeight + 8
                 theme: root.theme
 
@@ -94,7 +110,7 @@ Item {
             Card {
                 Layout.fillWidth: true
                 Layout.leftMargin: 18
-                Layout.rightMargin: 18
+                Layout.rightMargin: 18 + scroller.gutter
                 Layout.bottomMargin: 24
                 Layout.preferredHeight: powerRows.implicitHeight + 8
                 theme: root.theme

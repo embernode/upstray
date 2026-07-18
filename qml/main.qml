@@ -146,9 +146,9 @@ ApplicationWindow {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            height: 220
+            height: 300
             glowColor: appTheme[mainWindow.upsState]
-            intensity: appTheme.dark ? 0.22 : 0.14
+            intensity: appTheme.dark ? 0.10 : 0.07
         }
 
         ColumnLayout {
