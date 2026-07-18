@@ -6,10 +6,18 @@ import QtQuick
 // tabs already receive their other inputs. Colours are referenced through this
 // object rather than inlined, so a value changes in one place.
 //
+// Dark is v2 as authored, with one exception: lowBattery is brightened from
+// the design's #e5484d, which both reads more alert and lifts it from 4.42:1
+// to 5.21:1 on the card, clearing AA.
+//
 // Light-variant state colours are not the dark ones re-used: v2's greens and
 // ambers measure 1.9-2.4:1 against a light background, well under the 3:1
-// non-text minimum. They are darkened to hold at least 4.5:1 on white, since
-// these colours carry status text and the charge figure, not just the ring.
+// non-text minimum. They are darkened, since these colours carry status text
+// and the charge figure rather than only the ring. Most clear 4.5:1; the amber
+// is deliberately held at 3.92:1, because everything darker than that stops
+// reading as orange and starts reading as brown. It stays above the 3:1
+// non-text floor, and no state is signalled by colour alone — the ring level,
+// the label and the flow arrows all carry it too.
 QtObject {
     id: theme
 
@@ -35,8 +43,8 @@ QtObject {
 
     // ---- state ----
     readonly property color online:       dark ? "#2ecc71" : "#107a4a"
-    readonly property color onBattery:    dark ? "#e8930c" : "#a55d00"
-    readonly property color lowBattery:   dark ? "#e5484d" : "#c0272d"
+    readonly property color onBattery:    dark ? "#e8930c" : "#c26a00"
+    readonly property color lowBattery:   dark ? "#f05a60" : "#c0272d"
     readonly property color disconnected: dark ? "#7a828e" : "#5a616b"
 
     // Tint used behind status pills, derived from the state colour it sits under.
