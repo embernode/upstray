@@ -29,6 +29,12 @@ pub async fn run_polling_loop(
         if !notifications.is_empty() {
             tokio::spawn(notifier::send_notifications(notifications));
         }
+        // Retire alarms whose condition has resolved, so a standing critical
+        // notification does not outlive the problem it reported.
+        let dismissals = notifier::transition_dismissals(old_state.as_ref(), &new);
+        if !dismissals.is_empty() {
+            tokio::spawn(notifier::close_notifications(dismissals));
+        }
         let _ = state_tx.send(new.clone());
         *old_state = Some(new);
     };
