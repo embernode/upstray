@@ -37,6 +37,17 @@ Item {
             policy: ScrollBar.AsNeeded
         }
 
+        // A bare Flickable moves only a few pixels per wheel notch; ScrollView
+        // supplied this handling, so replacing it lost the wheel speed too.
+        WheelHandler {
+            acceptedDevices: PointerDevice.Mouse
+            onWheel: function (event) {
+                const limit = Math.max(0, scroller.contentHeight - scroller.height)
+                const delta = (event.angleDelta.y / 120) * 90
+                scroller.contentY = Math.max(0, Math.min(limit, scroller.contentY - delta))
+            }
+        }
+
         // The bar overlays the content rather than displacing it, so without
         // this it eats the right-hand padding rather than sitting beside it.
         readonly property real gutter: scrollBar.visible ? scrollBar.width : 0

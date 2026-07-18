@@ -232,6 +232,7 @@ ApplicationWindow {
                 }
 
                 SettingsTab {
+                    theme: appTheme
                     backend: backend
                 }
             }

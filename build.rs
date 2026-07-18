@@ -17,6 +17,10 @@ fn main() {
             .qml_file("qml/components/DetailRow.qml")
             .qml_file("qml/components/GlowOverlay.qml")
             .qml_file("qml/components/TitleBar.qml")
+            .qml_file("qml/components/ToggleSwitch.qml")
+            .qml_file("qml/components/ThemedButton.qml")
+            .qml_file("qml/components/ThemedField.qml")
+            .qml_file("qml/components/ThemedCombo.qml")
             .qml_file("qml/components/MonitorTab.qml")
             .qml_file("qml/components/DetailsTab.qml")
             .qml_file("qml/components/SettingsTab.qml"),

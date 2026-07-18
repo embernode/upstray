@@ -31,6 +31,9 @@ QtObject {
     readonly property color border:  dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(0, 0, 0, 0.10)
     readonly property color divider: dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.07)
     readonly property color track:   dark ? Qt.rgba(1, 1, 1, 0.07) : Qt.rgba(0, 0, 0, 0.08)
+    // Inputs need a border that reads as an edge, not the near-invisible
+    // hairline used to separate cards from the background.
+    readonly property color inputBorder: dark ? "#2a3038" : "#d0d4da"
 
     // ---- text ----
     readonly property color textPrimary:   dark ? "#e7eaee" : "#12151a"
